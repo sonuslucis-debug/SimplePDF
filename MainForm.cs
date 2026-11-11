@@ -31,7 +31,7 @@ namespace SimplePdfReader
         {
             string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimplePdfReader");
             var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await webView.EnsureCoreWebView2Async(env);
+            webView.EnsureCoreWebView2Async(env).GetAwaiter().GetResult();
             webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
             webView.CoreWebView2.Navigate("https://appassets.example");
         }
