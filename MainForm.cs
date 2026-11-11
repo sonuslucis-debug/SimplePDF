@@ -27,11 +27,11 @@ namespace SimplePdfReader
             InitializeWebView();
         }
 
-        private async void InitializeWebView()
+        private async Task InitializeWebView()
         {
             string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimplePdfReader");
             var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            webView.EnsureCoreWebView2Async(env).GetAwaiter().GetResult();
+            await webView.EnsureCoreWebView2Async(env).GetAwaiter().GetResult();
             webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
             webView.CoreWebView2.Navigate("https://appassets.example");
         }
@@ -181,13 +181,15 @@ namespace SimplePdfReader
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            var message = JsonDocument.Parse(e.WebMessageAsJson).RootElement;
-            var data = JsonSerializer.Deserialize<dynamic>(message.GetRawText());
-            pageStatusLabel.Text = $"Page {data.page} of {data.total}";
-            zoomStatusLabel.Text = $"Zoom: {data.zoom}%";
+            var root = JsonDocument.Parse(e.WebMessageAsJson).RootElement;
+            int page = root.GetProperty("page").GetInt32();
+            int total = root.GetProperty("total").GetInt32();
+            int zoom = (int)Math.Round(root.GetProperty("zoom").GetDouble() * 100);
+            pageStatusLabel.Text = $"Page {page} of {total}";
+            zoomStatusLabel.Text = $"Zoom: {zoom}%";
         }
 
-        private async void OpenPdfButton_Click(object sender, EventArgs e)
+        private async Task OpenPdfButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -200,31 +202,31 @@ namespace SimplePdfReader
             }
         }
 
-        private async void ZoomInButton_Click(object sender, EventArgs e)
+        private async Task ZoomInButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
         }
 
-        private async void ZoomOutButton_Click(object sender, EventArgs e)
+        private async Task ZoomOutButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
         }
 
-        private async void PrevPageButton_Click(object sender, EventArgs e)
+        private async Task PrevPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
         }
 
-        private async void NextPageButton_Click(object sender, EventArgs e)
+        private async Task NextPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
         }
 
-        private async void ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
+        private async Task ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
