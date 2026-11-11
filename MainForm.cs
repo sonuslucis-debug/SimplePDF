@@ -24,6 +24,16 @@ namespace SimplePdfReader
         public MainForm()
         {
             InitializeComponent();
+            InitializeWebView();
+        }
+
+        private async void InitializeWebView()
+        {
+            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimplePdfReader");
+            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+            await webView.EnsureCoreWebView2Async(env);
+            webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
+            webView.CoreWebView2.Navigate("https://appassets.example");
         }
 
         private void InitializeComponent()
@@ -164,16 +174,13 @@ namespace SimplePdfReader
         {
             if (e.IsSuccess)
             {
-                await webView.EnsureCoreWebView2Async(null);
-                webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-                webView.CoreWebView2.Navigate("https://appassets.example");
-                webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
-                webView.CoreWebView2.SetVirtualHostNameToFolderMapping("localpdf.example", Path.GetDirectoryName(Application.ExecutablePath), CoreWebView2HostResourceAccessKind.Allow);
+                await InitializeWebView();
             }
         }
 
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             var message = JsonDocument.Parse(e.WebMessageAsJson).RootElement;
             var data = JsonSerializer.Deserialize<dynamic>(message.GetRawText());
             pageStatusLabel.Text = $"Page {data.page} of {data.total}";
@@ -182,6 +189,7 @@ namespace SimplePdfReader
 
         private void OpenPdfButton_Click(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.Filter = "PDF Files|*.pdf";
@@ -194,26 +202,31 @@ namespace SimplePdfReader
 
         private void ZoomInButton_Click(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
         }
 
         private void ZoomOutButton_Click(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
         }
 
         private void PrevPageButton_Click(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
         }
 
         private void NextPageButton_Click(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
         }
 
         private void ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
         {
+            if (webView.CoreWebView2 == null) return;
             webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
         }
     }
