@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -166,20 +167,17 @@ namespace SimplePdfReader
                 await webView.EnsureCoreWebView2Async(null);
                 webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
                 webView.CoreWebView2.Navigate("https://appassets.example");
-                webView.CoreWebView2.Environment.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
-                webView.CoreWebView2.Environment.SetVirtualHostNameToFolderMapping("localpdf.example", Path.GetDirectoryName(Application.ExecutablePath), CoreWebView2HostResourceAccessKind.Allow);
+                webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
+                webView.CoreWebView2.SetVirtualHostNameToFolderMapping("localpdf.example", Path.GetDirectoryName(Application.ExecutablePath), CoreWebView2HostResourceAccessKind.Allow);
             }
         }
 
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            var message = e.TryGetWebMessageAsString();
-            if (message != null)
-            {
-                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(message);
-                pageStatusLabel.Text = $"Page {data.page} of {data.total}";
-                zoomStatusLabel.Text = $"Zoom: {data.zoom}%";
-            }
+            var message = JsonDocument.Parse(e.WebMessageAsJson).RootElement;
+            var data = JsonSerializer.Deserialize<dynamic>(message.GetRawText());
+            pageStatusLabel.Text = $"Page {data.page} of {data.total}";
+            zoomStatusLabel.Text = $"Zoom: {data.zoom}%";
         }
 
         private void OpenPdfButton_Click(object sender, EventArgs e)
