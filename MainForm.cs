@@ -187,7 +187,7 @@ namespace SimplePdfReader
             zoomStatusLabel.Text = $"Zoom: {data.zoom}%";
         }
 
-        private async Task OpenPdfButton_Click(object sender, EventArgs e)
+        private async void OpenPdfButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -200,31 +200,31 @@ namespace SimplePdfReader
             }
         }
 
-        private async Task ZoomInButton_Click(object sender, EventArgs e)
+        private async void ZoomInButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
         }
 
-        private async Task ZoomOutButton_Click(object sender, EventArgs e)
+        private async void ZoomOutButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
         }
 
-        private async Task PrevPageButton_Click(object sender, EventArgs e)
+        private async void PrevPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
         }
 
-        private async Task NextPageButton_Click(object sender, EventArgs e)
+        private async void NextPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
         }
 
-        private async Task ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
+        private async void ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
