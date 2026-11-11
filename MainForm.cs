@@ -187,7 +187,7 @@ namespace SimplePdfReader
             zoomStatusLabel.Text = $"Zoom: {data.zoom}%";
         }
 
-        private void OpenPdfButton_Click(object sender, EventArgs e)
+        private async Task OpenPdfButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -195,39 +195,39 @@ namespace SimplePdfReader
                 openFileDialog.Filter = "PDF Files|*.pdf";
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
-                    webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('https://localpdf.example{Uri.EscapeDataString(openFileDialog.FileName)}')");
+                    await webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('https://localpdf.example{Uri.EscapeDataString(openFileDialog.FileName)}')");
                 }
             }
         }
 
-        private void ZoomInButton_Click(object sender, EventArgs e)
+        private async Task ZoomInButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
+            await webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
         }
 
-        private void ZoomOutButton_Click(object sender, EventArgs e)
+        private async Task ZoomOutButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
+            await webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
         }
 
-        private void PrevPageButton_Click(object sender, EventArgs e)
+        private async Task PrevPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
+            await webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
         }
 
-        private void NextPageButton_Click(object sender, EventArgs e)
+        private async Task NextPageButton_Click(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
+            await webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
         }
 
-        private void ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
+        private async Task ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
+            await webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
         }
     }
 }
