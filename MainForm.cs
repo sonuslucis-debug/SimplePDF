@@ -32,17 +32,29 @@ namespace SimplePdfReader
         private ToolStripStatusLabel pageStatusLabel = null!;
         private ToolStripStatusLabel zoomStatusLabel = null!;
 
+        private readonly List<string> documentFiles = new();
+        private string? webRoot;
+        private string? pendingFilePath;
+        private string? lastDropPath;
+        private DateTime lastDropUtc;
+        private bool viewerReady;
+        private int documentCounter;
+
         internal static Icon? AppIcon => appIcon;
 
-        public MainForm()
+        public MainForm(string? initialFile = null)
         {
             InitializeComponent();
+
+            pendingFilePath = initialFile;
 
             appIcon = LoadAppIcon();
             if (appIcon != null)
             {
                 this.Icon = appIcon;
             }
+
+            this.FormClosed += MainForm_FormClosed;
 
             _ = InitializeWebViewAsync();
         }
@@ -83,12 +95,16 @@ namespace SimplePdfReader
                 var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                 await webView.EnsureCoreWebView2Async(env);
 
-                string webRoot = PrepareWebAssets(userDataFolder);
+                string webRootPath = PrepareWebAssets(userDataFolder);
+                webRoot = webRootPath;
+                DeleteStaleDocumentFiles();
 
                 webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                webView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+                webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
                 webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "appassets.example",
-                    webRoot,
+                    webRootPath,
                     CoreWebView2HostResourceAccessKind.Allow);
                 webView.CoreWebView2.Navigate("https://appassets.example/viewer.html");
             }
@@ -101,6 +117,252 @@ namespace SimplePdfReader
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+        }
+
+        private async void CoreWebView2_NavigationCompleted(
+            object? sender,
+            CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!e.IsSuccess)
+            {
+                return;
+            }
+
+            string? source = webView.CoreWebView2?.Source;
+            if (source == null ||
+                !source.StartsWith("https://appassets.example/viewer.html", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            viewerReady = true;
+
+            if (pendingFilePath != null)
+            {
+                string filePath = pendingFilePath;
+                pendingFilePath = null;
+                await OpenPdfAsync(filePath);
+            }
+        }
+
+        private async void CoreWebView2_NewWindowRequested(
+            object? sender,
+            CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            // The app never needs a second browser window.
+            e.Handled = true;
+
+            string uri = e.Uri;
+            if (string.IsNullOrEmpty(uri) ||
+                !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) ||
+                !parsed.IsFile)
+            {
+                return;
+            }
+
+            string filePath = parsed.LocalPath;
+            if (IsPdfFile(filePath))
+            {
+                await OpenPdfAsync(filePath);
+            }
+        }
+
+        private async Task OpenPdfAsync(string filePath)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (!viewerReady || string.IsNullOrEmpty(webRoot) || webView.CoreWebView2 == null)
+            {
+                pendingFilePath = filePath;
+                return;
+            }
+
+            if (!File.Exists(filePath))
+            {
+                MessageBox.Show(
+                    this,
+                    "The selected PDF file no longer exists.",
+                    "Simple PDF Reader",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            string documentName = $"document-{Environment.ProcessId}-{++documentCounter}.pdf";
+            string destinationPath = Path.Combine(webRoot!, documentName);
+            string temporaryPath = destinationPath + ".tmp";
+
+            pageStatusLabel.Text = "Loading PDF…";
+            printButton.Enabled = false;
+
+            try
+            {
+                await using (var source = new FileStream(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    81920,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan))
+                await using (var destination = new FileStream(
+                    temporaryPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    FileOptions.Asynchronous))
+                {
+                    await source.CopyToAsync(destination);
+                }
+
+                File.Move(temporaryPath, destinationPath, true);
+                documentFiles.Add(destinationPath);
+
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                // The viewer and the document share the same origin, so PDF.js can
+                // fetch the document without cross-origin restrictions.
+                string url = documentName + "?v=" + Environment.TickCount64;
+                await webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('{url}')");
+                this.Text = $"Simple PDF Reader - {Path.GetFileName(filePath)}";
+            }
+            catch (Exception ex)
+            {
+                TryDeleteFile(temporaryPath);
+
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                pageStatusLabel.Text = "Could not open the PDF file";
+                printButton.Enabled = false;
+                MessageBox.Show(
+                    this,
+                    $"The PDF could not be opened.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                    "Simple PDF Reader",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void DeleteStaleDocumentFiles()
+        {
+            if (string.IsNullOrEmpty(webRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (string file in Directory.EnumerateFiles(webRoot!, "document-*.pdf*"))
+                {
+                    if (!IsDocumentFileInUseByAnotherInstance(file))
+                    {
+                        TryDeleteFile(file);
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore cleanup failures; a new asset folder is used after updates.
+            }
+        }
+
+        private static bool IsDocumentFileInUseByAnotherInstance(string path)
+        {
+            string[] parts = Path.GetFileName(path).Split('-');
+            if (parts.Length < 3 || !int.TryParse(parts[1], out int ownerProcessId))
+            {
+                return false;
+            }
+
+            if (ownerProcessId == Environment.ProcessId)
+            {
+                // Left over from an earlier run that reused this process id.
+                return false;
+            }
+
+            try
+            {
+                using var process = System.Diagnostics.Process.GetProcessById(ownerProcessId);
+                return process.ProcessName.Equals(
+                    "SimplePdfReader",
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            foreach (string file in documentFiles)
+            {
+                TryDeleteFile(file);
+            }
+
+            documentFiles.Clear();
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Ignore files that are still in use.
+            }
+        }
+
+        private void HandleDragEnter(object? sender, DragEventArgs e)
+        {
+            string[]? files = e.Data?.GetData(DataFormats.FileDrop) as string[];
+            e.Effect = files != null && files.Any(IsPdfFile)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
+        }
+
+        private async void HandleDragDrop(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetData(DataFormats.FileDrop) is not string[] files)
+            {
+                return;
+            }
+
+            string? pdfPath = files.FirstOrDefault(IsPdfFile);
+            if (pdfPath == null)
+            {
+                return;
+            }
+
+            // Both the form and the WebView can report the same drop.
+            if (pdfPath == lastDropPath &&
+                (DateTime.UtcNow - lastDropUtc).TotalMilliseconds < 1000)
+            {
+                return;
+            }
+
+            lastDropPath = pdfPath;
+            lastDropUtc = DateTime.UtcNow;
+            await OpenPdfAsync(pdfPath);
+        }
+
+        private static bool IsPdfFile(string path)
+        {
+            return path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string PrepareWebAssets(string userDataFolder)
@@ -250,6 +512,9 @@ namespace SimplePdfReader
             this.toolStrip.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.SuspendLayout();
+            this.AllowDrop = true;
+            this.DragEnter += new DragEventHandler(this.HandleDragEnter);
+            this.DragDrop += new DragEventHandler(this.HandleDragDrop);
             // 
             // toolStrip
             // 
@@ -368,6 +633,9 @@ namespace SimplePdfReader
             this.webView.Name = "webView";
             this.webView.Size = new System.Drawing.Size(800, 399);
             this.webView.TabIndex = 2;
+            this.webView.AllowExternalDrop = true;
+            this.webView.DragEnter += new DragEventHandler(this.HandleDragEnter);
+            this.webView.DragDrop += new DragEventHandler(this.HandleDragDrop);
             // 
             // MainForm
             // 
@@ -418,6 +686,17 @@ namespace SimplePdfReader
                         printButton.Enabled = total > 0;
                         break;
 
+                    case "document":
+                        if (root.TryGetProperty("name", out JsonElement nameElement))
+                        {
+                            string? name = nameElement.GetString();
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                this.Text = $"Simple PDF Reader - {name}";
+                            }
+                        }
+                        break;
+
                     case "status":
                         if (root.TryGetProperty("text", out JsonElement textElement))
                         {
@@ -441,21 +720,7 @@ namespace SimplePdfReader
                 openFileDialog.Title = "Open PDF";
                 if (openFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    string? folder = Path.GetDirectoryName(openFileDialog.FileName);
-                    if (string.IsNullOrEmpty(folder)) return;
-
-                    // Map the folder that contains the selected file so the WebView can load it.
-                    webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                        "localpdf.example",
-                        folder,
-                        CoreWebView2HostResourceAccessKind.Allow);
-
-                    string fileName = Uri.EscapeDataString(Path.GetFileName(openFileDialog.FileName));
-                    string url = $"https://localpdf.example/{fileName}";
-
-                    pageStatusLabel.Text = "Loading PDF…";
-                    printButton.Enabled = false;
-                    await webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('{url}')");
+                    await OpenPdfAsync(openFileDialog.FileName);
                 }
             }
         }

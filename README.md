@@ -4,6 +4,7 @@ A simple PDF reader with no bells and whistles.
 ## Features
 
 - Open and view PDF documents
+- Drag and drop a PDF onto the window, or pass a PDF path on the command line
 - Page navigation, zoom and continuous mode
 - Print the whole document with the **Print** button or **Ctrl+P**
 - Custom application icon and an **About** dialog

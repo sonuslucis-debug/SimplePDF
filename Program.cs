@@ -6,11 +6,13 @@ namespace SimplePdfReader
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+
+            string? initialFile = args.Length > 0 ? args[0] : null;
+            Application.Run(new MainForm(initialFile));
         }
     }
 }

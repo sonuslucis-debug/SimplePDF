@@ -102,6 +102,10 @@
             notifyHost({ type: 'status', text: text });
         }
 
+        function reportDocument(name) {
+            notifyHost({ type: 'document', name: name });
+        }
+
         function renderPage(num) {
             if (!pdfDoc) {
                 return;
@@ -233,18 +237,16 @@
             onNextPage();
         }
 
-        function loadPdf(url) {
+        function openPdfDocument(task, name) {
             reportStatus('Loading PDF…');
-            return pdfjsLib.getDocument({
-                url: url,
-                cMapUrl: 'pdfjs/cmaps/',
-                cMapPacked: true,
-                standardFontDataUrl: 'pdfjs/standard_fonts/'
-            }).promise.then(function (pdf) {
+            return task.then(function (pdf) {
                 pdfDoc = pdf;
                 pageNum = 1;
                 queueRenderPage(pageNum);
                 reportState();
+                if (name) {
+                    reportDocument(name);
+                }
             }).catch(function (error) {
                 console.error('Failed to load PDF:', error);
                 pdfDoc = null;
@@ -252,6 +254,87 @@
                 reportStatus('Could not open the PDF file');
             });
         }
+
+        function loadPdf(url) {
+            return openPdfDocument(pdfjsLib.getDocument({
+                url: url,
+                cMapUrl: 'pdfjs/cmaps/',
+                cMapPacked: true,
+                standardFontDataUrl: 'pdfjs/standard_fonts/'
+            }).promise);
+        }
+
+        function loadPdfData(data, name) {
+            return openPdfDocument(pdfjsLib.getDocument({
+                data: data,
+                cMapUrl: 'pdfjs/cmaps/',
+                cMapPacked: true,
+                standardFontDataUrl: 'pdfjs/standard_fonts/'
+            }).promise, name);
+        }
+
+        function isPdfName(name) {
+            return typeof name === 'string' && /\.pdf$/i.test(name);
+        }
+
+        // Files dropped from Explorer are handled here so the page stays in
+        // control of the drop instead of the browser opening a second window.
+        function isPdfTransfer(dataTransfer) {
+            if (!dataTransfer) {
+                return false;
+            }
+            const files = dataTransfer.files;
+            if (files && files.length > 0) {
+                return Array.prototype.some.call(files, function (file) {
+                    return isPdfName(file.name);
+                });
+            }
+            const items = dataTransfer.items;
+            return items && Array.prototype.some.call(items, function (item) {
+                return item.kind === 'file';
+            });
+        }
+
+        window.addEventListener('dragenter', function (event) {
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'copy';
+            }
+        });
+
+        window.addEventListener('dragover', function (event) {
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = isPdfTransfer(event.dataTransfer) ? 'copy' : 'none';
+            }
+        });
+
+        window.addEventListener('drop', async function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const files = event.dataTransfer ? event.dataTransfer.files : null;
+            if (!files || files.length === 0) {
+                return;
+            }
+
+            const file = Array.prototype.find.call(files, function (candidate) {
+                return isPdfName(candidate.name);
+            });
+
+            if (!file) {
+                reportStatus('Drop a PDF file to open it');
+                return;
+            }
+
+            try {
+                const buffer = await file.arrayBuffer();
+                await loadPdfData(new Uint8Array(buffer), file.name);
+            } catch (error) {
+                console.error('Failed to read dropped PDF:', error);
+                reportStatus('Could not open the PDF file');
+            }
+        });
 
         function setContinuousMode(value) {
             continuousMode = value;
