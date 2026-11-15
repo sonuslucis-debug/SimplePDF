@@ -19,23 +19,92 @@
             position: absolute;
             pointer-events: none;
         }
+        #printContainer {
+            display: none;
+        }
+        @media print {
+            @page {
+                margin: 0;
+            }
+            html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: #fff;
+                overflow: visible;
+            }
+            body > *:not(#printContainer) {
+                display: none !important;
+            }
+            #printContainer {
+                display: block;
+            }
+            .print-page {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                height: 100vh;
+                overflow: hidden;
+                break-after: page;
+                page-break-after: always;
+            }
+            .print-page:last-child {
+                break-after: auto;
+                page-break-after: auto;
+            }
+            .print-page canvas {
+                width: auto;
+                height: auto;
+                max-width: 100%;
+                max-height: 100%;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+        }
     </style>
 </head>
 <body>
     <canvas id="pdfCanvas"></canvas>
     <div id="textLayer" class="textLayer"></div>
+    <div id="printContainer" aria-hidden="true"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
         const pdfCanvas = document.getElementById('pdfCanvas');
         const textLayer = document.getElementById('textLayer');
+        const printContainer = document.getElementById('printContainer');
         let pdfDoc = null;
         let pageNum = 1;
         let pageRendering = false;
         let pageNumPending = null;
         let scale = 1.0;
         let continuousMode = false;
+        let printInProgress = false;
+
+        function notifyHost(message) {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(message);
+            }
+        }
+
+        function reportState() {
+            notifyHost({
+                type: 'state',
+                page: pageNum,
+                total: pdfDoc ? pdfDoc.numPages : 0,
+                zoom: scale
+            });
+        }
+
+        function reportStatus(text) {
+            notifyHost({ type: 'status', text: text });
+        }
 
         function renderPage(num) {
+            if (!pdfDoc) {
+                return;
+            }
+
             pageRendering = true;
             pdfDoc.getPage(num).then(function (page) {
                 const viewport = page.getViewport({ scale: scale });
@@ -50,10 +119,16 @@
 
                 renderTask.promise.then(function () {
                     pageRendering = false;
+                    if (num === pageNum) {
+                        reportState();
+                    }
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
                     }
+                }).catch(function (error) {
+                    pageRendering = false;
+                    console.error('Failed to render page:', error);
                 });
 
                 if (continuousMode) {
@@ -82,13 +157,18 @@
                             textLayerElements.push(textElementDiv);
                         });
 
-                        textLayerDiv.appendChild(textLayerElements);
+                        textLayerElements.forEach(function (element) {
+                            textLayerDiv.appendChild(element);
+                        });
                     });
                 }
             });
         }
 
         function queueRenderPage(num) {
+            if (!pdfDoc) {
+                return;
+            }
             if (pageRendering) {
                 pageNumPending = num;
             } else {
@@ -97,24 +177,27 @@
         }
 
         function onPrevPage() {
-            if (pageNum <= 1) {
+            if (!pdfDoc || pageNum <= 1) {
                 return;
             }
             pageNum--;
             queueRenderPage(pageNum);
+            reportState();
         }
 
         function onNextPage() {
-            if (pageNum >= pdfDoc.numPages) {
+            if (!pdfDoc || pageNum >= pdfDoc.numPages) {
                 return;
             }
             pageNum++;
             queueRenderPage(pageNum);
+            reportState();
         }
 
         function onZoomIn() {
             scale += 0.15;
             queueRenderPage(pageNum);
+            reportState();
         }
 
         function onZoomOut() {
@@ -123,6 +206,7 @@
                 scale = 0.15;
             }
             queueRenderPage(pageNum);
+            reportState();
         }
 
         function onContinuousMode() {
@@ -130,11 +214,35 @@
             queueRenderPage(pageNum);
         }
 
+        // Functions called from the Windows host.
+        function zoomIn() {
+            onZoomIn();
+        }
+
+        function zoomOut() {
+            onZoomOut();
+        }
+
+        function prevPage() {
+            onPrevPage();
+        }
+
+        function nextPage() {
+            onNextPage();
+        }
+
         function loadPdf(url) {
-            pdfjsLib.getDocument(url).promise.then(function (pdf) {
+            reportStatus('Loading PDF…');
+            return pdfjsLib.getDocument(url).promise.then(function (pdf) {
                 pdfDoc = pdf;
                 pageNum = 1;
                 queueRenderPage(pageNum);
+                reportState();
+            }).catch(function (error) {
+                console.error('Failed to load PDF:', error);
+                pdfDoc = null;
+                reportState();
+                reportStatus('Could not open the PDF file');
             });
         }
 
@@ -143,13 +251,103 @@
             queueRenderPage(pageNum);
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            document.getElementById('prevPage').addEventListener('click', onPrevPage);
-            document.getElementById('nextPage').addEventListener('click', onNextPage);
-            document.getElementById('zoomIn').addEventListener('click', onZoomIn);
-            document.getElementById('zoomOut').addEventListener('click', onZoomOut);
-            document.getElementById('continuousMode').addEventListener('click', onContinuousMode);
+        async function preparePrintPages() {
+            const totalPages = pdfDoc.numPages;
 
+            // Use a lower resolution for long documents to keep memory usage and
+            // print preparation time under control.
+            let dpi = 150;
+            if (totalPages > 500) {
+                dpi = 72;
+            } else if (totalPages > 200) {
+                dpi = 96;
+            } else if (totalPages > 100) {
+                dpi = 110;
+            } else if (totalPages > 40) {
+                dpi = 130;
+            }
+
+            const maxDimension = 3200;
+
+            for (let num = 1; num <= totalPages; num++) {
+                reportStatus(`Preparing to print page ${num} of ${totalPages}…`);
+
+                const page = await pdfDoc.getPage(num);
+                let viewport = page.getViewport({ scale: dpi / 72 });
+
+                const longestSide = Math.max(viewport.width, viewport.height);
+                if (longestSide > maxDimension) {
+                    viewport = page.getViewport({
+                        scale: (dpi / 72) * (maxDimension / longestSide)
+                    });
+                }
+
+                const pageElement = document.createElement('div');
+                pageElement.className = 'print-page';
+
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.ceil(viewport.width);
+                canvas.height = Math.ceil(viewport.height);
+                canvas.setAttribute('aria-label', `Page ${num}`);
+
+                pageElement.appendChild(canvas);
+                printContainer.appendChild(pageElement);
+
+                await page.render({
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport,
+                    intent: 'print'
+                }).promise;
+
+                page.cleanup();
+            }
+        }
+
+        function exitPrintMode() {
+            const wasPrinting = document.body.classList.contains('printing');
+            document.body.classList.remove('printing');
+            if (printContainer.childElementCount > 0) {
+                printContainer.innerHTML = '';
+            }
+            printInProgress = false;
+            if (wasPrinting) {
+                reportState();
+            }
+        }
+
+        async function printPdf() {
+            if (!pdfDoc || printInProgress) {
+                return;
+            }
+
+            printInProgress = true;
+            printContainer.innerHTML = '';
+            document.body.classList.remove('printing');
+
+            try {
+                await preparePrintPages();
+                reportStatus('Opening print dialog…');
+                document.body.classList.add('printing');
+
+                // Let the browser lay out the print pages before opening the dialog.
+                await new Promise(function (resolve) {
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(resolve);
+                    });
+                });
+
+                window.print();
+            } catch (error) {
+                console.error('Failed to prepare the document for printing:', error);
+                reportStatus('Could not prepare the document for printing');
+            } finally {
+                exitPrintMode();
+            }
+        }
+
+        window.addEventListener('afterprint', exitPrintMode);
+
+        document.addEventListener('DOMContentLoaded', function () {
             document.addEventListener('wheel', function (event) {
                 if (event.ctrlKey) {
                     event.preventDefault();
@@ -163,7 +361,10 @@
 
             document.addEventListener('keydown', function (event) {
                 if (event.ctrlKey) {
-                    if (event.key === 'ArrowUp') {
+                    if (event.key === 'p' || event.key === 'P') {
+                        event.preventDefault();
+                        printPdf();
+                    } else if (event.key === 'ArrowUp') {
                         onPrevPage();
                     } else if (event.key === 'ArrowDown') {
                         onNextPage();

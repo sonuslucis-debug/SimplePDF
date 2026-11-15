@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <DebugType>None</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +20,11 @@
     <None Update="viewer.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="app.ico" LogicalName="SimplePdfReader.app.ico" />
+    <EmbeddedResource Include="logo.png" LogicalName="SimplePdfReader.logo.png" />
   </ItemGroup>
 
 </Project>

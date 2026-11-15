@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -9,42 +10,103 @@ namespace SimplePdfReader
 {
     public partial class MainForm : Form
     {
-        private WebView2 webView;
-        private StatusStrip statusStrip;
-        private ToolStrip toolStrip;
-        private ToolStripButton openPdfButton;
-        private ToolStripButton zoomInButton;
-        private ToolStripButton zoomOutButton;
-        private ToolStripButton prevPageButton;
-        private ToolStripButton nextPageButton;
-        private ToolStripButton continuousModeButton;
-        private ToolStripStatusLabel pageStatusLabel;
-        private ToolStripStatusLabel zoomStatusLabel;
+        private static Icon? appIcon;
+        private static Stream? appIconStream;
+
+        private WebView2 webView = null!;
+        private StatusStrip statusStrip = null!;
+        private ToolStrip toolStrip = null!;
+        private ToolStripButton openPdfButton = null!;
+        private ToolStripButton printButton = null!;
+        private ToolStripButton zoomInButton = null!;
+        private ToolStripButton zoomOutButton = null!;
+        private ToolStripButton prevPageButton = null!;
+        private ToolStripButton nextPageButton = null!;
+        private ToolStripButton continuousModeButton = null!;
+        private ToolStripButton aboutButton = null!;
+        private ToolStripStatusLabel pageStatusLabel = null!;
+        private ToolStripStatusLabel zoomStatusLabel = null!;
+
+        internal static Icon? AppIcon => appIcon;
 
         public MainForm()
         {
             InitializeComponent();
-            InitializeWebView();
+
+            appIcon = LoadAppIcon();
+            if (appIcon != null)
+            {
+                this.Icon = appIcon;
+            }
+
+            _ = InitializeWebViewAsync();
         }
 
-        private async Task InitializeWebView()
+        private static Icon? LoadAppIcon()
         {
-            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimplePdfReader");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await webView.EnsureCoreWebView2Async(env).GetAwaiter().GetResult();
-            webView.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets.example", AppContext.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
-            webView.CoreWebView2.Navigate("https://appassets.example");
+            try
+            {
+                // Keep the stream alive for as long as the icon is in use.
+                appIconStream = typeof(MainForm).Assembly.GetManifestResourceStream("SimplePdfReader.app.ico");
+                if (appIconStream != null)
+                {
+                    return new Icon(appIconStream);
+                }
+            }
+            catch
+            {
+                // Fall back to the icon embedded in the executable.
+            }
+
+            try
+            {
+                return Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            try
+            {
+                string userDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "SimplePdfReader");
+                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await webView.EnsureCoreWebView2Async(env);
+
+                webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "appassets.example",
+                    AppContext.BaseDirectory,
+                    CoreWebView2HostResourceAccessKind.Allow);
+                webView.CoreWebView2.Navigate("https://appassets.example");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    $"The PDF viewer could not be started.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                    "Simple PDF Reader",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
 
         private void InitializeComponent()
         {
             this.toolStrip = new ToolStrip();
             this.openPdfButton = new ToolStripButton();
+            this.printButton = new ToolStripButton();
             this.zoomInButton = new ToolStripButton();
             this.zoomOutButton = new ToolStripButton();
             this.prevPageButton = new ToolStripButton();
             this.nextPageButton = new ToolStripButton();
             this.continuousModeButton = new ToolStripButton();
+            this.aboutButton = new ToolStripButton();
             this.statusStrip = new StatusStrip();
             this.pageStatusLabel = new ToolStripStatusLabel();
             this.zoomStatusLabel = new ToolStripStatusLabel();
@@ -58,11 +120,13 @@ namespace SimplePdfReader
             this.toolStrip.GripStyle = ToolStripGripStyle.Hidden;
             this.toolStrip.Items.AddRange(new ToolStripItem[] {
             this.openPdfButton,
+            this.printButton,
             this.zoomInButton,
             this.zoomOutButton,
             this.prevPageButton,
             this.nextPageButton,
-            this.continuousModeButton});
+            this.continuousModeButton,
+            this.aboutButton});
             this.toolStrip.Location = new System.Drawing.Point(0, 0);
             this.toolStrip.Name = "toolStrip";
             this.toolStrip.Size = new System.Drawing.Size(800, 25);
@@ -76,6 +140,16 @@ namespace SimplePdfReader
             this.openPdfButton.Size = new System.Drawing.Size(75, 22);
             this.openPdfButton.Text = "Open PDF";
             this.openPdfButton.Click += new EventHandler(this.OpenPdfButton_Click);
+            // 
+            // printButton
+            // 
+            this.printButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.printButton.Enabled = false;
+            this.printButton.Name = "printButton";
+            this.printButton.Size = new System.Drawing.Size(50, 22);
+            this.printButton.Text = "Print";
+            this.printButton.ToolTipText = "Print the open document (Ctrl+P)";
+            this.printButton.Click += new EventHandler(this.PrintButton_Click);
             // 
             // zoomInButton
             // 
@@ -118,6 +192,15 @@ namespace SimplePdfReader
             this.continuousModeButton.Text = "Mode: Continuous";
             this.continuousModeButton.CheckedChanged += new EventHandler(this.ContinuousModeButton_CheckedChanged);
             // 
+            // aboutButton
+            // 
+            this.aboutButton.Alignment = ToolStripItemAlignment.Right;
+            this.aboutButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.aboutButton.Name = "aboutButton";
+            this.aboutButton.Size = new System.Drawing.Size(50, 22);
+            this.aboutButton.Text = "About";
+            this.aboutButton.Click += new EventHandler(this.AboutButton_Click);
+            // 
             // statusStrip
             // 
             this.statusStrip.Items.AddRange(new ToolStripItem[] {
@@ -149,7 +232,6 @@ namespace SimplePdfReader
             this.webView.Name = "webView";
             this.webView.Size = new System.Drawing.Size(800, 399);
             this.webView.TabIndex = 2;
-            this.webView.CoreWebView2InitializationCompleted += new EventHandler<CoreWebView2InitializationCompletedEventArgs>(this.WebView_CoreWebView2InitializationCompleted);
             // 
             // MainForm
             // 
@@ -170,66 +252,121 @@ namespace SimplePdfReader
 
         }
 
-        private async void WebView_CoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
+        private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            if (e.IsSuccess)
+            try
             {
-                await InitializeWebView();
+                using JsonDocument document = JsonDocument.Parse(e.WebMessageAsJson);
+                JsonElement root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !root.TryGetProperty("type", out JsonElement typeElement))
+                {
+                    return;
+                }
+
+                switch (typeElement.GetString())
+                {
+                    case "state":
+                        int page = root.TryGetProperty("page", out JsonElement pageElement)
+                            ? pageElement.GetInt32()
+                            : 0;
+                        int total = root.TryGetProperty("total", out JsonElement totalElement)
+                            ? totalElement.GetInt32()
+                            : 0;
+                        double zoom = root.TryGetProperty("zoom", out JsonElement zoomElement)
+                            ? zoomElement.GetDouble()
+                            : 1.0;
+
+                        pageStatusLabel.Text = total > 0 ? $"Page {page} of {total}" : "No PDF loaded";
+                        zoomStatusLabel.Text = $"Zoom: {Math.Round(zoom * 100)}%";
+                        printButton.Enabled = total > 0;
+                        break;
+
+                    case "status":
+                        if (root.TryGetProperty("text", out JsonElement textElement))
+                        {
+                            pageStatusLabel.Text = textElement.GetString() ?? pageStatusLabel.Text;
+                        }
+                        break;
+                }
+            }
+            catch (JsonException)
+            {
+                // Ignore malformed messages from the page.
             }
         }
 
-        private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
-        {
-            if (webView.CoreWebView2 == null) return;
-            var root = JsonDocument.Parse(e.WebMessageAsJson).RootElement;
-            int page = root.GetProperty("page").GetInt32();
-            int total = root.GetProperty("total").GetInt32();
-            int zoom = (int)Math.Round(root.GetProperty("zoom").GetDouble() * 100);
-            pageStatusLabel.Text = $"Page {page} of {total}";
-            zoomStatusLabel.Text = $"Zoom: {zoom}%";
-        }
-
-        private async Task OpenPdfButton_Click(object sender, EventArgs e)
+        private async void OpenPdfButton_Click(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.Filter = "PDF Files|*.pdf";
-                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                openFileDialog.Title = "Open PDF";
+                if (openFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    await webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('https://localpdf.example{Uri.EscapeDataString(openFileDialog.FileName)}')");
+                    string? folder = Path.GetDirectoryName(openFileDialog.FileName);
+                    if (string.IsNullOrEmpty(folder)) return;
+
+                    // Map the folder that contains the selected file so the WebView can load it.
+                    webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                        "localpdf.example",
+                        folder,
+                        CoreWebView2HostResourceAccessKind.Allow);
+
+                    string fileName = Uri.EscapeDataString(Path.GetFileName(openFileDialog.FileName));
+                    string url = $"https://localpdf.example/{fileName}";
+
+                    pageStatusLabel.Text = "Loading PDF…";
+                    printButton.Enabled = false;
+                    await webView.CoreWebView2.ExecuteScriptAsync($"loadPdf('{url}')");
                 }
             }
         }
 
-        private async Task ZoomInButton_Click(object sender, EventArgs e)
+        private async void PrintButton_Click(object? sender, EventArgs e)
+        {
+            if (webView.CoreWebView2 == null) return;
+            await webView.CoreWebView2.ExecuteScriptAsync("printPdf()");
+        }
+
+        private async void ZoomInButton_Click(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomIn()");
         }
 
-        private async Task ZoomOutButton_Click(object sender, EventArgs e)
+        private async void ZoomOutButton_Click(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("zoomOut()");
         }
 
-        private async Task PrevPageButton_Click(object sender, EventArgs e)
+        private async void PrevPageButton_Click(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("prevPage()");
         }
 
-        private async Task NextPageButton_Click(object sender, EventArgs e)
+        private async void NextPageButton_Click(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync("nextPage()");
         }
 
-        private async Task ContinuousModeButton_CheckedChanged(object sender, EventArgs e)
+        private async void ContinuousModeButton_CheckedChanged(object? sender, EventArgs e)
         {
             if (webView.CoreWebView2 == null) return;
-            await webView.CoreWebView2.ExecuteScriptAsync($"setContinuousMode({continuousModeButton.Checked})");
+            await webView.CoreWebView2.ExecuteScriptAsync(
+                $"setContinuousMode({(continuousModeButton.Checked ? "true" : "false")})");
+        }
+
+        private void AboutButton_Click(object? sender, EventArgs e)
+        {
+            using (var aboutForm = new AboutForm())
+            {
+                aboutForm.ShowDialog(this);
+            }
         }
     }
 }
