@@ -4,41 +4,221 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Viewer</title>
+    <!-- Brand palette and typography come from the site stylesheet. -->
+    <link rel="stylesheet" href="style.css">
     <style>
+        :root {
+            --navy: #0e3a5b;
+            --ink: #2b2b2b;
+            --paper: #ffffff;
+            --accent: #2e6da4;
+            --viewer-bg: #0a2a42;
+            --viewer-bg-edge: #061c2c;
+            --page-shadow: 0 8px 28px rgba(2, 12, 20, 0.55);
+            --selection: rgba(46, 109, 164, 0.32);
+            --page-gap: 22px;
+            --page-padding: 22px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
         body {
-            background-color: #2b2b2b;
+            height: 100%;
             margin: 0;
             padding: 0;
+            background: var(--viewer-bg);
             overflow: hidden;
         }
-        canvas {
-            display: block;
-            cursor: default;
+
+        body {
+            font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
+            color: var(--paper);
         }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        /* Scroll container: native wheel, keyboard and scrollbar behaviour. */
+        #viewer {
+            position: absolute;
+            inset: 0;
+            overflow: auto;
+            overscroll-behavior: contain;
+            background: linear-gradient(180deg, var(--viewer-bg) 0%, var(--viewer-bg-edge) 100%);
+            scrollbar-color: var(--accent) transparent;
+            outline: none;
+        }
+
+        #viewer::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        #viewer::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #viewer::-webkit-scrollbar-thumb {
+            background: rgba(46, 109, 164, 0.8);
+            border: 3px solid transparent;
+            border-radius: 7px;
+            background-clip: content-box;
+        }
+
+        #viewer::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+            background-clip: content-box;
+        }
+
+        #pages {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--page-gap);
+            min-height: 100%;
+            padding: var(--page-padding);
+        }
+
+        .page {
+            position: relative;
+            flex: 0 0 auto;
+            margin-inline: auto;
+            background: var(--paper);
+            box-shadow: var(--page-shadow);
+            overflow: hidden;
+        }
+
+        #pages.single .page {
+            margin-block: auto;
+        }
+
+        .page canvas {
+            display: block;
+        }
+
+        /* PDF.js text layer: transparent, selectable text above the canvas. */
         .textLayer {
             position: absolute;
-            pointer-events: none;
+            inset: 0;
+            z-index: 2;
+            overflow: hidden;
+            line-height: 1;
+            text-align: initial;
+            text-size-adjust: none;
+            forced-color-adjust: none;
+            transform-origin: 0 0;
         }
+
+        .textLayer :is(span, br) {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+
+        .textLayer span.markedContent {
+            top: 0;
+            height: 0;
+        }
+
+        .textLayer ::selection {
+            background: var(--selection);
+        }
+
+        .textLayer br::selection {
+            background: transparent;
+        }
+
+        /* Empty state and drop hint use the site's navy/accent palette. */
+        .empty {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            padding: 32px;
+        }
+
+        .empty-card {
+            max-width: 460px;
+            text-align: center;
+            border: 1px solid rgba(46, 109, 164, 0.55);
+            border-radius: 10px;
+            padding: 28px 34px;
+            background: rgba(14, 58, 91, 0.55);
+            box-shadow: 0 10px 30px rgba(2, 12, 20, 0.45);
+        }
+
+        .empty-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: var(--paper);
+            margin-bottom: 8px;
+        }
+
+        .empty-text {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #cfe0ee;
+        }
+
+        #dropOverlay {
+            position: fixed;
+            inset: 14px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px dashed var(--accent);
+            border-radius: 12px;
+            background: rgba(10, 42, 66, 0.72);
+            color: var(--paper);
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        body.dragging #dropOverlay {
+            opacity: 1;
+        }
+
         #printContainer {
             display: none;
         }
+
         @media print {
             @page {
                 margin: 0;
             }
-            html, body {
+
+            html,
+            body {
                 width: 100%;
+                height: auto;
                 margin: 0;
                 padding: 0;
-                background: #fff;
+                background: var(--paper);
                 overflow: visible;
             }
+
             body > *:not(#printContainer) {
                 display: none !important;
             }
+
             #printContainer {
                 display: block;
             }
+
             .print-page {
                 display: flex;
                 align-items: center;
@@ -49,10 +229,12 @@
                 break-after: page;
                 page-break-after: always;
             }
+
             .print-page:last-child {
                 break-after: auto;
                 page-break-after: auto;
             }
+
             .print-page canvas {
                 width: auto;
                 height: auto;
@@ -65,21 +247,47 @@
     </style>
 </head>
 <body>
-    <canvas id="pdfCanvas"></canvas>
-    <div id="textLayer" class="textLayer"></div>
+    <div id="viewer" tabindex="0">
+        <div id="pages" class="single"></div>
+    </div>
+
+    <div id="empty" class="empty">
+        <div class="empty-card">
+            <div class="empty-title">Simple PDF Reader</div>
+            <div class="empty-text">
+                Open a PDF, drop one onto this window, or pass a file on the command line.
+            </div>
+        </div>
+    </div>
+
+    <div id="dropOverlay"><span>Drop PDF to open</span></div>
     <div id="printContainer" aria-hidden="true"></div>
+
     <script src="pdfjs/pdf.min.js"></script>
     <script>
-        const pdfCanvas = document.getElementById('pdfCanvas');
-        const textLayer = document.getElementById('textLayer');
+        const viewerEl = document.getElementById('viewer');
+        const pagesEl = document.getElementById('pages');
+        const emptyEl = document.getElementById('empty');
         const printContainer = document.getElementById('printContainer');
+
+        const MIN_SCALE = 0.25;
+        const MAX_SCALE = 4;
+        const ZOOM_STEP = 0.15;
+        const PAGE_PADDING = 22;
+
         let pdfDoc = null;
-        let pageNum = 1;
-        let pageRendering = false;
-        let pageNumPending = null;
-        let scale = 1.0;
-        let continuousMode = false;
+        let currentPage = 1;
+        let scale = 1;
+        let continuous = false;
+        let generation = 0;
+        let loadToken = 0;
+        let pageViews = [];
+        const viewByElement = new Map();
+        let observer = null;
         let printInProgress = false;
+        let dragDepth = 0;
+        let scrollScheduled = false;
+        let lastStateKey = '';
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
 
@@ -89,13 +297,14 @@
             }
         }
 
-        function reportState() {
-            notifyHost({
-                type: 'state',
-                page: pageNum,
-                total: pdfDoc ? pdfDoc.numPages : 0,
-                zoom: scale
-            });
+        function reportState(force) {
+            const total = pdfDoc ? pdfDoc.numPages : 0;
+            const key = `${currentPage}/${total}/${scale}`;
+            if (!force && key === lastStateKey) {
+                return;
+            }
+            lastStateKey = key;
+            notifyHost({ type: 'state', page: currentPage, total: total, zoom: scale });
         }
 
         function reportStatus(text) {
@@ -106,153 +315,398 @@
             notifyHost({ type: 'document', name: name });
         }
 
-        function renderPage(num) {
-            if (!pdfDoc) {
-                return;
-            }
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
 
-            pageRendering = true;
-            pdfDoc.getPage(num).then(function (page) {
-                const viewport = page.getViewport({ scale: scale });
-                pdfCanvas.height = viewport.height;
-                pdfCanvas.width = viewport.width;
+        function showEmptyState() {
+            emptyEl.hidden = false;
+            pagesEl.hidden = true;
+        }
 
-                const renderContext = {
-                    canvasContext: pdfCanvas.getContext('2d'),
-                    viewport: viewport
-                };
-                const renderTask = page.render(renderContext);
+        function showDocumentState() {
+            emptyEl.hidden = true;
+            pagesEl.hidden = false;
+        }
 
-                renderTask.promise.then(function () {
-                    pageRendering = false;
-                    if (num === pageNum) {
-                        reportState();
+        function cancelAndClearPages() {
+            for (const view of pageViews) {
+                if (view.renderTask) {
+                    try {
+                        view.renderTask.cancel();
+                    } catch (error) {
+                        // The render may already have finished.
                     }
-                    if (pageNumPending !== null) {
-                        renderPage(pageNumPending);
-                        pageNumPending = null;
-                    }
-                }).catch(function (error) {
-                    pageRendering = false;
-                    console.error('Failed to render page:', error);
-                });
-
-                if (continuousMode) {
-                    textLayer.innerHTML = '';
-                    page.getTextContent().then(function (textContent) {
-                        const textLayerDiv = document.createElement('div');
-                        textLayerDiv.style.position = 'absolute';
-                        textLayerDiv.style.left = '0';
-                        textLayerDiv.style.top = '0';
-                        textLayerDiv.style.width = '100%';
-                        textLayerDiv.style.height = '100%';
-                        textLayerDiv.style.pointerEvents = 'none';
-                        textLayerDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
-                        textLayer.appendChild(textLayerDiv);
-
-                        const textLayerElements = [];
-                        textContent.items.forEach(function (item) {
-                            const textElementDiv = document.createElement('div');
-                            textElementDiv.style.left = item.transform[4] + 'px';
-                            textElementDiv.style.top = item.transform[5] + 'px';
-                            textElementDiv.style.width = item.width + 'px';
-                            textElementDiv.style.height = item.height + 'px';
-                            textElementDiv.style.position = 'absolute';
-                            textElementDiv.style.pointerEvents = 'none';
-                            textElementDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
-                            textLayerElements.push(textElementDiv);
-                        });
-
-                        textLayerElements.forEach(function (element) {
-                            textLayerDiv.appendChild(element);
-                        });
-                    });
+                    view.renderTask = null;
                 }
-            });
+                if (view.textTask && typeof view.textTask.cancel === 'function') {
+                    try {
+                        view.textTask.cancel();
+                    } catch (error) {
+                        // The text layer may already have finished.
+                    }
+                }
+                view.element.remove();
+            }
+            pageViews = [];
+            viewByElement.clear();
+            pagesEl.textContent = '';
         }
 
-        function queueRenderPage(num) {
+        function captureAnchor() {
+            if (!continuous) {
+                return null;
+            }
+            const view = pageViews.find(function (candidate) {
+                return candidate.number === currentPage;
+            });
+            if (!view) {
+                return null;
+            }
+            return {
+                page: currentPage,
+                offset: view.element.getBoundingClientRect().top - viewerEl.getBoundingClientRect().top
+            };
+        }
+
+        function restoreAnchor(anchor) {
+            if (!anchor || !continuous) {
+                return;
+            }
+            const view = pageViews.find(function (candidate) {
+                return candidate.number === anchor.page;
+            });
+            if (!view) {
+                return;
+            }
+            const offset = view.element.getBoundingClientRect().top - viewerEl.getBoundingClientRect().top;
+            viewerEl.scrollTop += offset - anchor.offset;
+        }
+
+        async function rebuild(options) {
+            const useAnchor = !options || options.anchor !== false;
+            const anchor = useAnchor ? captureAnchor() : null;
+            const gen = ++generation;
+
+            if (observer) {
+                observer.disconnect();
+                observer = null;
+            }
+            cancelAndClearPages();
+
+            if (!pdfDoc) {
+                showEmptyState();
+                reportState(true);
+                return;
+            }
+
+            showDocumentState();
+            const total = pdfDoc.numPages;
+            currentPage = clamp(currentPage, 1, total);
+            const numbers = continuous
+                ? Array.from({ length: total }, function (_, index) { return index + 1; })
+                : [currentPage];
+            pagesEl.classList.toggle('single', !continuous);
+
+            let sizes;
+            try {
+                sizes = await Promise.all(numbers.map(async function (number) {
+                    const page = await pdfDoc.getPage(number);
+                    return page.getViewport({ scale: 1 });
+                }));
+            } catch (error) {
+                if (gen === generation) {
+                    console.error('Failed to read page sizes:', error);
+                    showEmptyState();
+                }
+                return;
+            }
+            if (gen !== generation) {
+                return;
+            }
+
+            numbers.forEach(function (number, index) {
+                const base = sizes[index];
+                const element = document.createElement('div');
+                element.className = 'page';
+                element.dataset.page = String(number);
+                element.style.width = Math.round(base.width * scale) + 'px';
+                element.style.height = Math.round(base.height * scale) + 'px';
+
+                const canvas = document.createElement('canvas');
+                const textLayer = document.createElement('div');
+                textLayer.className = 'textLayer';
+                element.appendChild(canvas);
+                element.appendChild(textLayer);
+                pagesEl.appendChild(element);
+
+                const view = {
+                    number: number,
+                    element: element,
+                    canvas: canvas,
+                    textLayer: textLayer,
+                    rendered: false,
+                    rendering: false,
+                    renderTask: null,
+                    textTask: null,
+                    gen: gen
+                };
+                pageViews.push(view);
+                viewByElement.set(element, view);
+            });
+
+            restoreAnchor(anchor);
+
+            if (typeof IntersectionObserver === 'function') {
+                observer = new IntersectionObserver(function (entries) {
+                    for (const entry of entries) {
+                        if (!entry.isIntersecting) {
+                            continue;
+                        }
+                        const view = viewByElement.get(entry.target);
+                        if (view) {
+                            renderPageView(view);
+                        }
+                    }
+                }, { root: viewerEl, rootMargin: '600px 0px', threshold: 0 });
+                pageViews.forEach(function (view) {
+                    observer.observe(view.element);
+                });
+            } else {
+                pageViews.forEach(renderPageView);
+            }
+
+            reportState(true);
+        }
+
+        async function renderPageView(view) {
+            if (!pdfDoc || view.gen !== generation || view.rendered || view.rendering) {
+                return;
+            }
+            view.rendering = true;
+
+            try {
+                const page = await pdfDoc.getPage(view.number);
+                if (view.gen !== generation || !view.element.isConnected) {
+                    return;
+                }
+
+                const viewport = page.getViewport({ scale: scale });
+                const ratio = window.devicePixelRatio || 1;
+                const canvas = view.canvas;
+
+                canvas.width = Math.max(1, Math.round(viewport.width * ratio));
+                canvas.height = Math.max(1, Math.round(viewport.height * ratio));
+                canvas.style.width = viewport.width + 'px';
+                canvas.style.height = viewport.height + 'px';
+
+                const context = canvas.getContext('2d', { alpha: false });
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+
+                const renderTask = page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                    transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0],
+                    background: 'rgb(255, 255, 255)'
+                });
+                view.renderTask = renderTask;
+                await renderTask.promise;
+                view.renderTask = null;
+
+                if (view.gen !== generation) {
+                    return;
+                }
+                view.rendered = true;
+
+                const textContent = await page.getTextContent();
+                if (view.gen !== generation) {
+                    return;
+                }
+
+                view.textLayer.textContent = '';
+                view.textLayer.style.setProperty('--scale-factor', String(viewport.scale));
+
+                try {
+                    const textTask = pdfjsLib.renderTextLayer({
+                        textContentSource: textContent,
+                        container: view.textLayer,
+                        viewport: viewport,
+                        textDivs: []
+                    });
+                    view.textTask = textTask;
+                    if (textTask && textTask.promise) {
+                        await textTask.promise;
+                    }
+                } catch (error) {
+                    if (!error || error.name !== 'RenderingCancelledException') {
+                        console.error('Text layer failed on page ' + view.number + ':', error);
+                    }
+                } finally {
+                    view.textTask = null;
+                }
+            } catch (error) {
+                if (!error || error.name !== 'RenderingCancelledException') {
+                    console.error('Failed to render page ' + view.number + ':', error);
+                }
+            } finally {
+                view.renderTask = null;
+                view.rendering = false;
+            }
+        }
+
+        function updateVisiblePage() {
+            if (!continuous || !pdfDoc || pageViews.length === 0) {
+                return;
+            }
+            const viewerRect = viewerEl.getBoundingClientRect();
+            const top = viewerRect.top;
+            const bottom = viewerRect.bottom;
+            let bestPage = currentPage;
+            let bestVisible = 0;
+
+            for (const view of pageViews) {
+                const rect = view.element.getBoundingClientRect();
+                const visible = Math.min(rect.bottom, bottom) - Math.max(rect.top, top);
+                if (visible > bestVisible) {
+                    bestVisible = visible;
+                    bestPage = view.number;
+                }
+            }
+
+            if (bestVisible > 0 && bestPage !== currentPage) {
+                currentPage = bestPage;
+                reportState();
+            }
+        }
+
+        function scrollToCurrentPage() {
+            const view = pageViews.find(function (candidate) {
+                return candidate.number === currentPage;
+            });
+            if (!view) {
+                return;
+            }
+            const offset = view.element.getBoundingClientRect().top
+                - viewerEl.getBoundingClientRect().top
+                + viewerEl.scrollTop
+                - PAGE_PADDING;
+            viewerEl.scrollTop = Math.max(0, offset);
+            renderPageView(view);
+        }
+
+        function goToPage(number) {
             if (!pdfDoc) {
                 return;
             }
-            if (pageRendering) {
-                pageNumPending = num;
+            currentPage = clamp(number, 1, pdfDoc.numPages);
+
+            if (continuous) {
+                const view = pageViews.find(function (candidate) {
+                    return candidate.number === currentPage;
+                });
+                if (view) {
+                    renderPageView(view);
+                    const offset = view.element.getBoundingClientRect().top
+                        - viewerEl.getBoundingClientRect().top
+                        + viewerEl.scrollTop
+                        - PAGE_PADDING;
+                    viewerEl.scrollTop = Math.max(0, offset);
+                }
             } else {
-                renderPage(num);
+                viewerEl.scrollTop = 0;
+                rebuild({ anchor: false });
             }
+            reportState(true);
         }
 
-        function onPrevPage() {
-            if (!pdfDoc || pageNum <= 1) {
+        function setScale(value) {
+            const next = clamp(Math.round(value * 100) / 100, MIN_SCALE, MAX_SCALE);
+            if (!pdfDoc || next === scale) {
                 return;
             }
-            pageNum--;
-            queueRenderPage(pageNum);
-            reportState();
-        }
-
-        function onNextPage() {
-            if (!pdfDoc || pageNum >= pdfDoc.numPages) {
-                return;
-            }
-            pageNum++;
-            queueRenderPage(pageNum);
-            reportState();
-        }
-
-        function onZoomIn() {
-            scale += 0.15;
-            queueRenderPage(pageNum);
-            reportState();
-        }
-
-        function onZoomOut() {
-            scale -= 0.15;
-            if (scale < 0.15) {
-                scale = 0.15;
-            }
-            queueRenderPage(pageNum);
-            reportState();
-        }
-
-        function onContinuousMode() {
-            continuousMode = !continuousMode;
-            queueRenderPage(pageNum);
+            scale = next;
+            rebuild({ anchor: true });
+            reportState(true);
         }
 
         // Functions called from the Windows host.
         function zoomIn() {
-            onZoomIn();
+            setScale(scale + ZOOM_STEP);
         }
 
         function zoomOut() {
-            onZoomOut();
+            setScale(scale - ZOOM_STEP);
         }
 
         function prevPage() {
-            onPrevPage();
+            goToPage(currentPage - 1);
         }
 
         function nextPage() {
-            onNextPage();
+            goToPage(currentPage + 1);
         }
 
-        function openPdfDocument(task, name) {
+        async function setContinuousMode(value) {
+            const next = !!value;
+            if (next === continuous) {
+                return;
+            }
+            continuous = next;
+            await rebuild({ anchor: false });
+            if (continuous) {
+                scrollToCurrentPage();
+            } else {
+                viewerEl.scrollTop = 0;
+            }
+        }
+
+        async function openPdfDocument(task, name) {
+            const token = ++loadToken;
             reportStatus('Loading PDF…');
-            return task.then(function (pdf) {
+
+            try {
+                const pdf = await task;
+                if (token !== loadToken) {
+                    try {
+                        pdf.destroy();
+                    } catch (error) {
+                        // Ignore teardown failures for a superseded document.
+                    }
+                    return;
+                }
+
+                const previous = pdfDoc;
                 pdfDoc = pdf;
-                pageNum = 1;
-                queueRenderPage(pageNum);
-                reportState();
+                currentPage = 1;
+                scale = 1;
+                await rebuild({ anchor: false });
+
+                if (previous && previous !== pdf) {
+                    try {
+                        await previous.destroy();
+                    } catch (error) {
+                        // Ignore teardown failures.
+                    }
+                }
+
+                reportState(true);
+                reportStatus('Ready');
                 if (name) {
                     reportDocument(name);
                 }
-            }).catch(function (error) {
+            } catch (error) {
+                if (token !== loadToken) {
+                    return;
+                }
                 console.error('Failed to load PDF:', error);
                 pdfDoc = null;
-                reportState();
-                reportStatus('Could not open the PDF file');
-            });
+                await rebuild({ anchor: false });
+                reportStatus(
+                    error && error.name === 'PasswordException'
+                        ? 'This PDF is password-protected'
+                        : 'Could not open the PDF file');
+            }
         }
 
         function loadPdf(url) {
@@ -277,8 +731,6 @@
             return typeof name === 'string' && /\.pdf$/i.test(name);
         }
 
-        // Files dropped from Explorer are handled here so the page stays in
-        // control of the drop instead of the browser opening a second window.
         function isPdfTransfer(dataTransfer) {
             if (!dataTransfer) {
                 return false;
@@ -290,15 +742,26 @@
                 });
             }
             const items = dataTransfer.items;
-            return items && Array.prototype.some.call(items, function (item) {
+            return !!items && Array.prototype.some.call(items, function (item) {
                 return item.kind === 'file';
             });
         }
 
+        // Files dropped from Explorer are read here so the page stays in control
+        // of the drop instead of the browser opening a second window.
         window.addEventListener('dragenter', function (event) {
             event.preventDefault();
-            if (event.dataTransfer) {
-                event.dataTransfer.dropEffect = 'copy';
+            dragDepth++;
+            if (isPdfTransfer(event.dataTransfer)) {
+                document.body.classList.add('dragging');
+            }
+        });
+
+        window.addEventListener('dragleave', function (event) {
+            event.preventDefault();
+            dragDepth = Math.max(0, dragDepth - 1);
+            if (dragDepth === 0) {
+                document.body.classList.remove('dragging');
             }
         });
 
@@ -312,6 +775,8 @@
         window.addEventListener('drop', async function (event) {
             event.preventDefault();
             event.stopPropagation();
+            dragDepth = 0;
+            document.body.classList.remove('dragging');
 
             const files = event.dataTransfer ? event.dataTransfer.files : null;
             if (!files || files.length === 0) {
@@ -336,16 +801,51 @@
             }
         });
 
-        function setContinuousMode(value) {
-            continuousMode = value;
-            queueRenderPage(pageNum);
-        }
+        viewerEl.addEventListener('scroll', function () {
+            if (!continuous || scrollScheduled) {
+                return;
+            }
+            scrollScheduled = true;
+            requestAnimationFrame(function () {
+                scrollScheduled = false;
+                updateVisiblePage();
+            });
+        }, { passive: true });
+
+        window.addEventListener('wheel', function (event) {
+            if (!event.ctrlKey) {
+                return;
+            }
+            event.preventDefault();
+            if (event.deltaY < 0) {
+                zoomIn();
+            } else {
+                zoomOut();
+            }
+        }, { passive: false });
+
+        window.addEventListener('keydown', function (event) {
+            if (event.ctrlKey && (event.key === 'p' || event.key === 'P')) {
+                event.preventDefault();
+                printPdf();
+                return;
+            }
+            if (!continuous && !event.ctrlKey && !event.altKey) {
+                if (event.key === 'PageDown' || event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    nextPage();
+                } else if (event.key === 'PageUp' || event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    prevPage();
+                }
+            }
+        });
 
         async function preparePrintPages() {
             const totalPages = pdfDoc.numPages;
 
-            // Use a lower resolution for long documents to keep memory usage and
-            // print preparation time under control.
+            // Lower resolutions for long documents keep memory use and print
+            // preparation time under control.
             let dpi = 150;
             if (totalPages > 500) {
                 dpi = 72;
@@ -359,10 +859,10 @@
 
             const maxDimension = 3200;
 
-            for (let num = 1; num <= totalPages; num++) {
-                reportStatus(`Preparing to print page ${num} of ${totalPages}…`);
+            for (let number = 1; number <= totalPages; number++) {
+                reportStatus(`Preparing to print page ${number} of ${totalPages}…`);
 
-                const page = await pdfDoc.getPage(num);
+                const page = await pdfDoc.getPage(number);
                 let viewport = page.getViewport({ scale: dpi / 72 });
 
                 const longestSide = Math.max(viewport.width, viewport.height);
@@ -378,7 +878,7 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = Math.ceil(viewport.width);
                 canvas.height = Math.ceil(viewport.height);
-                canvas.setAttribute('aria-label', `Page ${num}`);
+                canvas.setAttribute('aria-label', `Page ${number}`);
 
                 pageElement.appendChild(canvas);
                 printContainer.appendChild(pageElement);
@@ -388,21 +888,14 @@
                     viewport: viewport,
                     intent: 'print'
                 }).promise;
-
-                page.cleanup();
             }
         }
 
         function exitPrintMode() {
-            const wasPrinting = document.body.classList.contains('printing');
-            document.body.classList.remove('printing');
             if (printContainer.childElementCount > 0) {
                 printContainer.innerHTML = '';
             }
             printInProgress = false;
-            if (wasPrinting) {
-                reportState();
-            }
         }
 
         async function printPdf() {
@@ -412,12 +905,10 @@
 
             printInProgress = true;
             printContainer.innerHTML = '';
-            document.body.classList.remove('printing');
 
             try {
                 await preparePrintPages();
                 reportStatus('Opening print dialog…');
-                document.body.classList.add('printing');
 
                 // Let the browser lay out the print pages before opening the dialog.
                 await new Promise(function (resolve) {
@@ -432,51 +923,14 @@
                 reportStatus('Could not prepare the document for printing');
             } finally {
                 exitPrintMode();
+                reportStatus('Ready');
             }
         }
 
         window.addEventListener('afterprint', exitPrintMode);
 
-        document.addEventListener('DOMContentLoaded', function () {
-            document.addEventListener('wheel', function (event) {
-                if (event.ctrlKey) {
-                    event.preventDefault();
-                    if (event.deltaY < 0) {
-                        onZoomIn();
-                    } else {
-                        onZoomOut();
-                    }
-                }
-            });
-
-            document.addEventListener('keydown', function (event) {
-                if (event.ctrlKey) {
-                    if (event.key === 'p' || event.key === 'P') {
-                        event.preventDefault();
-                        printPdf();
-                    } else if (event.key === 'ArrowUp') {
-                        onPrevPage();
-                    } else if (event.key === 'ArrowDown') {
-                        onNextPage();
-                    }
-                }
-            });
-
-            document.addEventListener('mousemove', function (event) {
-                if (event.buttons === 1) {
-                    const rect = pdfCanvas.getBoundingClientRect();
-                    const dx = event.clientX - rect.left;
-                    const dy = event.clientY - rect.top;
-                    pdfCanvas.style.transform = `translate(${dx}px, ${dy}px)`;
-                }
-            });
-
-            document.addEventListener('mouseup', function (event) {
-                if (event.buttons === 1) {
-                    pdfCanvas.style.transform = 'none';
-                }
-            });
-        });
+        showEmptyState();
+        reportState(true);
     </script>
 </body>
 </html>

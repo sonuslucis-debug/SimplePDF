@@ -9,7 +9,7 @@
     <DebugType>None</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +22,7 @@
 
     <!-- The viewer and PDF.js are embedded so the published app is a single EXE. -->
     <EmbeddedResource Include="viewer.html" LogicalName="SimplePdfReader.web.viewer.html" />
+    <EmbeddedResource Include="style.css" LogicalName="SimplePdfReader.web.style.css" Condition="Exists('style.css')" />
     <EmbeddedResource Include="web\pdfjs\pdf.min.js" LogicalName="SimplePdfReader.web.pdfjs.pdf.min.js" />
     <EmbeddedResource Include="web\pdfjs\pdf.worker.min.js" LogicalName="SimplePdfReader.web.pdfjs.pdf.worker.min.js" />
     <EmbeddedResource Include="web\pdfjs\LICENSE" LogicalName="SimplePdfReader.web.pdfjs.LICENSE" />

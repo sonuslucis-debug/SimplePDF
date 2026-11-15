@@ -5,8 +5,11 @@ A simple PDF reader with no bells and whistles.
 
 - Open and view PDF documents
 - Drag and drop a PDF onto the window, or pass a PDF path on the command line
-- Page navigation, zoom and continuous mode
+- Smooth mouse-wheel scrolling through the whole document
+- Page-by-page or continuous mode, with zoom
+- Selectable text, so passages can be copied out of a PDF
 - Print the whole document with the **Print** button or **Ctrl+P**
+- Sonus Lucis styling drawn from the website palette and logo
 - Custom application icon and an **About** dialog
 - Single, self-contained EXE with PDF.js embedded (no CDN or support files)
 - Works offline
@@ -33,5 +36,6 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 - PDF rendering by [Mozilla PDF.js](https://mozilla.github.io/pdf.js/)
 - Built with .NET 8, Windows Forms and Microsoft Edge WebView2
+- Design and branding by [Sonus Lucis](https://sonuslucis.com)
 - Printing support, offline PDF.js bundling, application icon integration and
   the About dialog by **DeepSeek V4.1 Flash Free (OpenCode)**

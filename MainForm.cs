@@ -19,18 +19,23 @@ namespace SimplePdfReader
         private static Stream? appIconStream;
 
         private WebView2 webView = null!;
-        private StatusStrip statusStrip = null!;
-        private ToolStrip toolStrip = null!;
-        private ToolStripButton openPdfButton = null!;
-        private ToolStripButton printButton = null!;
-        private ToolStripButton zoomInButton = null!;
-        private ToolStripButton zoomOutButton = null!;
-        private ToolStripButton prevPageButton = null!;
-        private ToolStripButton nextPageButton = null!;
-        private ToolStripButton continuousModeButton = null!;
-        private ToolStripButton aboutButton = null!;
-        private ToolStripStatusLabel pageStatusLabel = null!;
-        private ToolStripStatusLabel zoomStatusLabel = null!;
+        private Panel headerPanel = null!;
+        private PictureBox headerLogo = null!;
+        private Label titleLabel = null!;
+        private Label subtitleLabel = null!;
+        private Panel toolbarPanel = null!;
+        private Panel statusPanel = null!;
+        private BrandButton openPdfButton = null!;
+        private BrandButton printButton = null!;
+        private BrandButton zoomInButton = null!;
+        private BrandButton zoomOutButton = null!;
+        private BrandButton prevPageButton = null!;
+        private BrandButton nextPageButton = null!;
+        private BrandButton continuousModeButton = null!;
+        private BrandButton aboutButton = null!;
+        private Label pageStatusLabel = null!;
+        private Label zoomStatusLabel = null!;
+        private readonly ToolTip toolTip = new ToolTip();
 
         private readonly List<string> documentFiles = new();
         private string? webRoot;
@@ -39,6 +44,8 @@ namespace SimplePdfReader
         private DateTime lastDropUtc;
         private bool viewerReady;
         private int documentCounter;
+        private int lastPage;
+        private int lastPageTotal;
 
         internal static Icon? AppIcon => appIcon;
 
@@ -487,6 +494,7 @@ namespace SimplePdfReader
             return resourceSuffix switch
             {
                 "viewer.html" => "viewer.html",
+                "style.css" => "style.css",
                 "pdfjs.pdf.min.js" => "pdfjs/pdf.min.js",
                 "pdfjs.pdf.worker.min.js" => "pdfjs/pdf.worker.min.js",
                 "pdfjs.LICENSE" => "pdfjs/LICENSE",
@@ -496,144 +504,237 @@ namespace SimplePdfReader
 
         private void InitializeComponent()
         {
-            this.toolStrip = new ToolStrip();
-            this.openPdfButton = new ToolStripButton();
-            this.printButton = new ToolStripButton();
-            this.zoomInButton = new ToolStripButton();
-            this.zoomOutButton = new ToolStripButton();
-            this.prevPageButton = new ToolStripButton();
-            this.nextPageButton = new ToolStripButton();
-            this.continuousModeButton = new ToolStripButton();
-            this.aboutButton = new ToolStripButton();
-            this.statusStrip = new StatusStrip();
-            this.pageStatusLabel = new ToolStripStatusLabel();
-            this.zoomStatusLabel = new ToolStripStatusLabel();
+            this.headerPanel = new Panel();
+            this.headerLogo = new PictureBox();
+            this.titleLabel = new Label();
+            this.subtitleLabel = new Label();
+            this.aboutButton = new BrandButton();
+            this.toolbarPanel = new Panel();
+            this.openPdfButton = new BrandButton();
+            this.printButton = new BrandButton();
+            this.prevPageButton = new BrandButton();
+            this.nextPageButton = new BrandButton();
+            this.continuousModeButton = new BrandButton();
+            this.zoomOutButton = new BrandButton();
+            this.zoomInButton = new BrandButton();
+            this.statusPanel = new Panel();
+            this.pageStatusLabel = new Label();
+            this.zoomStatusLabel = new Label();
             this.webView = new WebView2();
-            this.toolStrip.SuspendLayout();
-            this.statusStrip.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)this.headerLogo).BeginInit();
+            this.headerPanel.SuspendLayout();
+            this.toolbarPanel.SuspendLayout();
+            this.statusPanel.SuspendLayout();
             this.SuspendLayout();
             this.AllowDrop = true;
             this.DragEnter += new DragEventHandler(this.HandleDragEnter);
             this.DragDrop += new DragEventHandler(this.HandleDragDrop);
             // 
-            // toolStrip
+            // headerPanel
             // 
-            this.toolStrip.GripStyle = ToolStripGripStyle.Hidden;
-            this.toolStrip.Items.AddRange(new ToolStripItem[] {
-            this.openPdfButton,
-            this.printButton,
-            this.zoomInButton,
-            this.zoomOutButton,
-            this.prevPageButton,
-            this.nextPageButton,
-            this.continuousModeButton,
-            this.aboutButton});
-            this.toolStrip.Location = new System.Drawing.Point(0, 0);
-            this.toolStrip.Name = "toolStrip";
-            this.toolStrip.Size = new System.Drawing.Size(800, 25);
-            this.toolStrip.TabIndex = 0;
-            this.toolStrip.Text = "toolStrip";
+            this.headerPanel.BackColor = Brand.Navy;
+            this.headerPanel.Dock = DockStyle.Top;
+            this.headerPanel.Height = 58;
+            this.headerPanel.Name = "headerPanel";
+            // 
+            // headerLogo
+            // 
+            this.headerLogo.BackColor = Color.Transparent;
+            this.headerLogo.Image = Brand.LoadLogo();
+            this.headerLogo.Location = new Point(16, 11);
+            this.headerLogo.Name = "headerLogo";
+            this.headerLogo.Size = new Size(36, 36);
+            this.headerLogo.SizeMode = PictureBoxSizeMode.Zoom;
+            this.headerLogo.TabStop = false;
+            // 
+            // titleLabel
+            // 
+            this.titleLabel.AutoSize = true;
+            this.titleLabel.BackColor = Color.Transparent;
+            this.titleLabel.Font = Brand.Font(13.5f, FontStyle.Bold);
+            this.titleLabel.ForeColor = Color.White;
+            this.titleLabel.Location = new Point(60, 8);
+            this.titleLabel.Name = "titleLabel";
+            this.titleLabel.Text = "SIMPLE PDF";
+            // 
+            // subtitleLabel
+            // 
+            this.subtitleLabel.AutoSize = true;
+            this.subtitleLabel.BackColor = Color.Transparent;
+            this.subtitleLabel.Font = Brand.Font(8.25f, FontStyle.Regular);
+            this.subtitleLabel.ForeColor = Brand.OnNavyMuted;
+            this.subtitleLabel.Location = new Point(62, 32);
+            this.subtitleLabel.Name = "subtitleLabel";
+            this.subtitleLabel.Text = "by Sonus Lucis";
+            // 
+            // aboutButton
+            // 
+            this.aboutButton.Margin = new Padding(0);
+            this.aboutButton.Name = "aboutButton";
+            this.aboutButton.Size = new Size(84, 30);
+            this.aboutButton.Style = BrandButtonStyle.Header;
+            this.aboutButton.Text = "About";
+            this.aboutButton.Click += new EventHandler(this.AboutButton_Click);
+            // 
+            // headerActions
+            // 
+            var headerActions = new FlowLayoutPanel();
+            headerActions.BackColor = Brand.Navy;
+            headerActions.Dock = DockStyle.Right;
+            headerActions.FlowDirection = FlowDirection.RightToLeft;
+            headerActions.Padding = new Padding(12, 14, 16, 0);
+            headerActions.Width = 112;
+            headerActions.WrapContents = false;
+            headerActions.Controls.Add(this.aboutButton);
+            this.headerPanel.Controls.Add(this.headerLogo);
+            this.headerPanel.Controls.Add(this.titleLabel);
+            this.headerPanel.Controls.Add(this.subtitleLabel);
+            this.headerPanel.Controls.Add(headerActions);
+            // 
+            // toolbarPanel
+            // 
+            this.toolbarPanel.BackColor = Brand.Paper;
+            this.toolbarPanel.Dock = DockStyle.Top;
+            this.toolbarPanel.Height = 48;
+            this.toolbarPanel.Name = "toolbarPanel";
+            this.toolbarPanel.Paint += new PaintEventHandler(this.ToolbarPanel_Paint);
             // 
             // openPdfButton
             // 
-            this.openPdfButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.openPdfButton.Location = new Point(16, 9);
             this.openPdfButton.Name = "openPdfButton";
-            this.openPdfButton.Size = new System.Drawing.Size(75, 22);
+            this.openPdfButton.Size = new Size(100, 30);
+            this.openPdfButton.Style = BrandButtonStyle.Primary;
             this.openPdfButton.Text = "Open PDF";
             this.openPdfButton.Click += new EventHandler(this.OpenPdfButton_Click);
             // 
             // printButton
             // 
-            this.printButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
             this.printButton.Enabled = false;
+            this.printButton.Location = new Point(124, 9);
             this.printButton.Name = "printButton";
-            this.printButton.Size = new System.Drawing.Size(50, 22);
+            this.printButton.Size = new Size(72, 30);
             this.printButton.Text = "Print";
-            this.printButton.ToolTipText = "Print the open document (Ctrl+P)";
             this.printButton.Click += new EventHandler(this.PrintButton_Click);
-            // 
-            // zoomInButton
-            // 
-            this.zoomInButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            this.zoomInButton.Name = "zoomInButton";
-            this.zoomInButton.Size = new System.Drawing.Size(50, 22);
-            this.zoomInButton.Text = "Zoom In (+)";
-            this.zoomInButton.Click += new EventHandler(this.ZoomInButton_Click);
-            // 
-            // zoomOutButton
-            // 
-            this.zoomOutButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            this.zoomOutButton.Name = "zoomOutButton";
-            this.zoomOutButton.Size = new System.Drawing.Size(54, 22);
-            this.zoomOutButton.Text = "Zoom Out (-)";
-            this.zoomOutButton.Click += new EventHandler(this.ZoomOutButton_Click);
+            this.toolTip.SetToolTip(this.printButton, "Print the open document (Ctrl+P)");
             // 
             // prevPageButton
             // 
-            this.prevPageButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.prevPageButton.Location = new Point(216, 9);
             this.prevPageButton.Name = "prevPageButton";
-            this.prevPageButton.Size = new System.Drawing.Size(50, 22);
+            this.prevPageButton.Size = new Size(82, 30);
             this.prevPageButton.Text = "Prev Page";
             this.prevPageButton.Click += new EventHandler(this.PrevPageButton_Click);
             // 
             // nextPageButton
             // 
-            this.nextPageButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.nextPageButton.Location = new Point(306, 9);
             this.nextPageButton.Name = "nextPageButton";
-            this.nextPageButton.Size = new System.Drawing.Size(50, 22);
+            this.nextPageButton.Size = new Size(82, 30);
             this.nextPageButton.Text = "Next Page";
             this.nextPageButton.Click += new EventHandler(this.NextPageButton_Click);
             // 
             // continuousModeButton
             // 
             this.continuousModeButton.CheckOnClick = true;
-            this.continuousModeButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            this.continuousModeButton.Location = new Point(408, 9);
             this.continuousModeButton.Name = "continuousModeButton";
-            this.continuousModeButton.Size = new System.Drawing.Size(80, 22);
-            this.continuousModeButton.Text = "Mode: Continuous";
+            this.continuousModeButton.Size = new Size(118, 30);
+            this.continuousModeButton.Text = "Mode: Page";
             this.continuousModeButton.CheckedChanged += new EventHandler(this.ContinuousModeButton_CheckedChanged);
             // 
-            // aboutButton
+            // zoomOutButton
             // 
-            this.aboutButton.Alignment = ToolStripItemAlignment.Right;
-            this.aboutButton.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            this.aboutButton.Name = "aboutButton";
-            this.aboutButton.Size = new System.Drawing.Size(50, 22);
-            this.aboutButton.Text = "About";
-            this.aboutButton.Click += new EventHandler(this.AboutButton_Click);
+            this.zoomOutButton.Location = new Point(546, 9);
+            this.zoomOutButton.Name = "zoomOutButton";
+            this.zoomOutButton.Size = new Size(36, 30);
+            this.zoomOutButton.Text = "-";
+            this.zoomOutButton.Click += new EventHandler(this.ZoomOutButton_Click);
+            this.toolTip.SetToolTip(this.zoomOutButton, "Zoom out (Ctrl+scroll down)");
             // 
-            // statusStrip
+            // zoomInButton
             // 
-            this.statusStrip.Items.AddRange(new ToolStripItem[] {
-            this.pageStatusLabel,
-            this.zoomStatusLabel});
-            this.statusStrip.Location = new System.Drawing.Point(0, 425);
-            this.statusStrip.Name = "statusStrip";
-            this.statusStrip.Size = new System.Drawing.Size(800, 22);
-            this.statusStrip.TabIndex = 1;
-            this.statusStrip.Text = "statusStrip";
+            this.zoomInButton.Location = new Point(590, 9);
+            this.zoomInButton.Name = "zoomInButton";
+            this.zoomInButton.Size = new Size(36, 30);
+            this.zoomInButton.Text = "+";
+            this.zoomInButton.Click += new EventHandler(this.ZoomInButton_Click);
+            this.toolTip.SetToolTip(this.zoomInButton, "Zoom in (Ctrl+scroll up)");
+            // 
+            // toolbarSeparator1
+            // 
+            var toolbarSeparator1 = new Panel();
+            toolbarSeparator1.BackColor = Brand.PaleBorder;
+            toolbarSeparator1.Location = new Point(204, 14);
+            toolbarSeparator1.Size = new Size(1, 20);
+            // 
+            // toolbarSeparator2
+            // 
+            var toolbarSeparator2 = new Panel();
+            toolbarSeparator2.BackColor = Brand.PaleBorder;
+            toolbarSeparator2.Location = new Point(396, 14);
+            toolbarSeparator2.Size = new Size(1, 20);
+            // 
+            // toolbarSeparator3
+            // 
+            var toolbarSeparator3 = new Panel();
+            toolbarSeparator3.BackColor = Brand.PaleBorder;
+            toolbarSeparator3.Location = new Point(534, 14);
+            toolbarSeparator3.Size = new Size(1, 20);
+            this.toolbarPanel.Controls.Add(this.openPdfButton);
+            this.toolbarPanel.Controls.Add(this.printButton);
+            this.toolbarPanel.Controls.Add(toolbarSeparator1);
+            this.toolbarPanel.Controls.Add(this.prevPageButton);
+            this.toolbarPanel.Controls.Add(this.nextPageButton);
+            this.toolbarPanel.Controls.Add(toolbarSeparator2);
+            this.toolbarPanel.Controls.Add(this.continuousModeButton);
+            this.toolbarPanel.Controls.Add(toolbarSeparator3);
+            this.toolbarPanel.Controls.Add(this.zoomOutButton);
+            this.toolbarPanel.Controls.Add(this.zoomInButton);
+            // 
+            // statusPanel
+            // 
+            this.statusPanel.BackColor = Brand.PaleBlue;
+            this.statusPanel.Dock = DockStyle.Bottom;
+            this.statusPanel.Height = 28;
+            this.statusPanel.Name = "statusPanel";
+            this.statusPanel.Padding = new Padding(16, 0, 16, 0);
+            this.statusPanel.Paint += new PaintEventHandler(this.StatusPanel_Paint);
             // 
             // pageStatusLabel
             // 
+            this.pageStatusLabel.AutoSize = false;
+            this.pageStatusLabel.BackColor = Color.Transparent;
+            this.pageStatusLabel.Dock = DockStyle.Fill;
+            this.pageStatusLabel.Font = Brand.Font(9f, FontStyle.Regular);
+            this.pageStatusLabel.ForeColor = Brand.Navy;
             this.pageStatusLabel.Name = "pageStatusLabel";
-            this.pageStatusLabel.Size = new System.Drawing.Size(118, 17);
             this.pageStatusLabel.Text = "No PDF loaded";
+            this.pageStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // zoomStatusLabel
             // 
-            this.zoomStatusLabel.Alignment = ToolStripItemAlignment.Right;
+            this.zoomStatusLabel.AutoSize = false;
+            this.zoomStatusLabel.BackColor = Color.Transparent;
+            this.zoomStatusLabel.Dock = DockStyle.Right;
+            this.zoomStatusLabel.Font = Brand.Font(9f, FontStyle.Bold);
+            this.zoomStatusLabel.ForeColor = Brand.Accent;
             this.zoomStatusLabel.Name = "zoomStatusLabel";
-            this.zoomStatusLabel.Size = new System.Drawing.Size(70, 17);
+            this.zoomStatusLabel.Size = new Size(120, 28);
             this.zoomStatusLabel.Text = "Zoom: 100%";
+            this.zoomStatusLabel.TextAlign = ContentAlignment.MiddleRight;
+            this.statusPanel.Controls.Add(this.pageStatusLabel);
+            this.statusPanel.Controls.Add(this.zoomStatusLabel);
             // 
             // webView
             // 
-            this.webView.Dock = DockStyle.Fill;
-            this.webView.Location = new System.Drawing.Point(0, 25);
-            this.webView.Name = "webView";
-            this.webView.Size = new System.Drawing.Size(800, 399);
-            this.webView.TabIndex = 2;
             this.webView.AllowExternalDrop = true;
+            this.webView.DefaultBackgroundColor = Brand.Navy;
+            this.webView.Dock = DockStyle.Fill;
+            this.webView.Location = new Point(0, 106);
+            this.webView.Name = "webView";
+            this.webView.Size = new System.Drawing.Size(1024, 586);
+            this.webView.TabIndex = 2;
             this.webView.DragEnter += new DragEventHandler(this.HandleDragEnter);
             this.webView.DragDrop += new DragEventHandler(this.HandleDragDrop);
             // 
@@ -641,19 +742,35 @@ namespace SimplePdfReader
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 447);
+            this.BackColor = Brand.Navy;
+            this.ClientSize = new System.Drawing.Size(1024, 720);
+            this.MinimumSize = new System.Drawing.Size(760, 520);
+            this.StartPosition = FormStartPosition.CenterScreen;
             this.Controls.Add(this.webView);
-            this.Controls.Add(this.statusStrip);
-            this.Controls.Add(this.toolStrip);
+            this.Controls.Add(this.statusPanel);
+            this.Controls.Add(this.toolbarPanel);
+            this.Controls.Add(this.headerPanel);
             this.Name = "MainForm";
             this.Text = "Simple PDF Reader";
-            this.toolStrip.ResumeLayout(false);
-            this.toolStrip.PerformLayout();
-            this.statusStrip.ResumeLayout(false);
-            this.statusStrip.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)this.headerLogo).EndInit();
+            this.headerPanel.ResumeLayout(false);
+            this.headerPanel.PerformLayout();
+            this.toolbarPanel.ResumeLayout(false);
+            this.statusPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
+        }
 
+        private void ToolbarPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            using var pen = new Pen(Brand.PaleBorder);
+            e.Graphics.DrawLine(pen, 0, toolbarPanel.Height - 1, toolbarPanel.Width, toolbarPanel.Height - 1);
+        }
+
+        private void StatusPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            using var pen = new Pen(Brand.PaleBorder);
+            e.Graphics.DrawLine(pen, 0, 0, statusPanel.Width, 0);
         }
 
         private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -681,7 +798,9 @@ namespace SimplePdfReader
                             ? zoomElement.GetDouble()
                             : 1.0;
 
-                        pageStatusLabel.Text = total > 0 ? $"Page {page} of {total}" : "No PDF loaded";
+                        lastPage = page;
+                        lastPageTotal = total;
+                        pageStatusLabel.Text = FormatPageStatus();
                         zoomStatusLabel.Text = $"Zoom: {Math.Round(zoom * 100)}%";
                         printButton.Enabled = total > 0;
                         break;
@@ -700,7 +819,15 @@ namespace SimplePdfReader
                     case "status":
                         if (root.TryGetProperty("text", out JsonElement textElement))
                         {
-                            pageStatusLabel.Text = textElement.GetString() ?? pageStatusLabel.Text;
+                            string? text = textElement.GetString();
+                            if (!string.IsNullOrEmpty(text))
+                            {
+                                // "Ready" is a transient message; keep the page
+                                // position visible in the status bar instead.
+                                pageStatusLabel.Text = string.Equals(text, "Ready", StringComparison.Ordinal)
+                                    ? FormatPageStatus()
+                                    : text;
+                            }
                         }
                         break;
                 }
@@ -709,6 +836,11 @@ namespace SimplePdfReader
             {
                 // Ignore malformed messages from the page.
             }
+        }
+
+        private string FormatPageStatus()
+        {
+            return lastPageTotal > 0 ? $"Page {lastPage} of {lastPageTotal}" : "No PDF loaded";
         }
 
         private async void OpenPdfButton_Click(object? sender, EventArgs e)
@@ -757,6 +889,10 @@ namespace SimplePdfReader
 
         private async void ContinuousModeButton_CheckedChanged(object? sender, EventArgs e)
         {
+            continuousModeButton.Text = continuousModeButton.Checked
+                ? "Mode: Continuous"
+                : "Mode: Page";
+
             if (webView.CoreWebView2 == null) return;
             await webView.CoreWebView2.ExecuteScriptAsync(
                 $"setContinuousMode({(continuousModeButton.Checked ? "true" : "false")})");
