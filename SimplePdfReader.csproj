@@ -9,7 +9,7 @@
     <DebugType>None</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,14 +17,26 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="viewer.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="app.ico" LogicalName="SimplePdfReader.app.ico" />
     <EmbeddedResource Include="logo.png" LogicalName="SimplePdfReader.logo.png" />
+
+    <!-- The viewer and PDF.js are embedded so the published app is a single EXE. -->
+    <EmbeddedResource Include="viewer.html" LogicalName="SimplePdfReader.web.viewer.html" />
+    <EmbeddedResource Include="web\pdfjs\pdf.min.js" LogicalName="SimplePdfReader.web.pdfjs.pdf.min.js" />
+    <EmbeddedResource Include="web\pdfjs\pdf.worker.min.js" LogicalName="SimplePdfReader.web.pdfjs.pdf.worker.min.js" />
+    <EmbeddedResource Include="web\pdfjs\LICENSE" LogicalName="SimplePdfReader.web.pdfjs.LICENSE" />
+    <EmbeddedResource Include="web\pdfjs\standard_fonts\LICENSE_FOXIT" LogicalName="SimplePdfReader.web.pdfjs.standard_fonts.LICENSE_FOXIT" />
+    <EmbeddedResource Include="web\pdfjs\standard_fonts\LICENSE_LIBERATION" LogicalName="SimplePdfReader.web.pdfjs.standard_fonts.LICENSE_LIBERATION" />
+    <EmbeddedResource Include="web\pdfjs\cmaps\*.bcmap" LogicalName="SimplePdfReader.web.pdfjs.cmaps.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="web\pdfjs\standard_fonts\*.pfb" LogicalName="SimplePdfReader.web.pdfjs.standard_fonts.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="web\pdfjs\standard_fonts\*.ttf" LogicalName="SimplePdfReader.web.pdfjs.standard_fonts.%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <!-- Keep only the single EXE in the publish output. -->
+  <Target Name="RemoveDocumentationFilesFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.xml'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

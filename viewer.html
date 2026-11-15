@@ -68,7 +68,7 @@
     <canvas id="pdfCanvas"></canvas>
     <div id="textLayer" class="textLayer"></div>
     <div id="printContainer" aria-hidden="true"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="pdfjs/pdf.min.js"></script>
     <script>
         const pdfCanvas = document.getElementById('pdfCanvas');
         const textLayer = document.getElementById('textLayer');
@@ -80,6 +80,8 @@
         let scale = 1.0;
         let continuousMode = false;
         let printInProgress = false;
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
 
         function notifyHost(message) {
             if (window.chrome && window.chrome.webview) {
@@ -233,7 +235,12 @@
 
         function loadPdf(url) {
             reportStatus('Loading PDF…');
-            return pdfjsLib.getDocument(url).promise.then(function (pdf) {
+            return pdfjsLib.getDocument({
+                url: url,
+                cMapUrl: 'pdfjs/cmaps/',
+                cMapPacked: true,
+                standardFontDataUrl: 'pdfjs/standard_fonts/'
+            }).promise.then(function (pdf) {
                 pdfDoc = pdf;
                 pageNum = 1;
                 queueRenderPage(pageNum);

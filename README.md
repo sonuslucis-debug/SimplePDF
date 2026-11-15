@@ -7,6 +7,14 @@ A simple PDF reader with no bells and whistles.
 - Page navigation, zoom and continuous mode
 - Print the whole document with the **Print** button or **Ctrl+P**
 - Custom application icon and an **About** dialog
+- Single, self-contained EXE with PDF.js embedded (no CDN or support files)
+- Works offline
+
+## Requirements
+
+- Windows 10 or Windows 11
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+  (already installed on most Windows systems)
 
 ## Build
 
@@ -24,5 +32,5 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 - PDF rendering by [Mozilla PDF.js](https://mozilla.github.io/pdf.js/)
 - Built with .NET 8, Windows Forms and Microsoft Edge WebView2
-- Printing support, application icon integration and About dialog by
-  **DeepSeek V4.1 Flash Free (OpenCode)**
+- Printing support, offline PDF.js bundling, application icon integration and
+  the About dialog by **DeepSeek V4.1 Flash Free (OpenCode)**

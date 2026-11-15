@@ -1,6 +1,9 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -10,6 +13,8 @@ namespace SimplePdfReader
 {
     public partial class MainForm : Form
     {
+        private const string WebAssetResourcePrefix = "SimplePdfReader.web.";
+
         private static Icon? appIcon;
         private static Stream? appIconStream;
 
@@ -78,12 +83,14 @@ namespace SimplePdfReader
                 var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                 await webView.EnsureCoreWebView2Async(env);
 
+                string webRoot = PrepareWebAssets(userDataFolder);
+
                 webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
                 webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "appassets.example",
-                    AppContext.BaseDirectory,
+                    webRoot,
                     CoreWebView2HostResourceAccessKind.Allow);
-                webView.CoreWebView2.Navigate("https://appassets.example");
+                webView.CoreWebView2.Navigate("https://appassets.example/viewer.html");
             }
             catch (Exception ex)
             {
@@ -94,6 +101,135 @@ namespace SimplePdfReader
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+        }
+
+        private static string PrepareWebAssets(string userDataFolder)
+        {
+            string assetHash = ComputeWebAssetHash();
+            string webRoot = Path.Combine(userDataFolder, "web", assetHash);
+            string markerPath = Path.Combine(webRoot, ".ready");
+
+            if (File.Exists(markerPath))
+            {
+                return webRoot;
+            }
+
+            string tempRoot = webRoot + ".tmp-" + Guid.NewGuid().ToString("N");
+            Directory.CreateDirectory(tempRoot);
+
+            try
+            {
+                var assembly = typeof(MainForm).Assembly;
+                foreach (string resourceName in assembly.GetManifestResourceNames())
+                {
+                    if (!resourceName.StartsWith(WebAssetResourcePrefix, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    string? relativePath = GetWebAssetPath(
+                        resourceName.Substring(WebAssetResourcePrefix.Length));
+                    if (relativePath == null)
+                    {
+                        continue;
+                    }
+
+                    string destinationPath = Path.Combine(
+                        tempRoot,
+                        relativePath.Replace('/', Path.DirectorySeparatorChar));
+                    string? destinationFolder = Path.GetDirectoryName(destinationPath);
+                    if (!string.IsNullOrEmpty(destinationFolder))
+                    {
+                        Directory.CreateDirectory(destinationFolder);
+                    }
+
+                    using Stream source = assembly.GetManifestResourceStream(resourceName)
+                        ?? throw new InvalidOperationException($"Missing embedded resource: {resourceName}");
+                    using FileStream destination = File.Create(destinationPath);
+                    source.CopyTo(destination);
+                }
+
+                File.WriteAllText(Path.Combine(tempRoot, ".ready"), assetHash);
+
+                if (Directory.Exists(webRoot))
+                {
+                    Directory.Delete(webRoot, true);
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(webRoot)!);
+                Directory.Move(tempRoot, webRoot);
+            }
+            catch
+            {
+                if (Directory.Exists(tempRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(tempRoot, true);
+                    }
+                    catch
+                    {
+                        // Ignore cleanup failures.
+                    }
+                }
+
+                throw;
+            }
+
+            return webRoot;
+        }
+
+        private static string ComputeWebAssetHash()
+        {
+            var assembly = typeof(MainForm).Assembly;
+            string[] resourceNames = assembly.GetManifestResourceNames()
+                .Where(name => name.StartsWith(WebAssetResourcePrefix, StringComparison.Ordinal))
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+
+            using var sha256 = SHA256.Create();
+            byte[] buffer = new byte[81920];
+
+            foreach (string resourceName in resourceNames)
+            {
+                byte[] nameBytes = Encoding.UTF8.GetBytes(resourceName);
+                sha256.TransformBlock(nameBytes, 0, nameBytes.Length, null, 0);
+
+                using Stream stream = assembly.GetManifestResourceStream(resourceName)
+                    ?? throw new InvalidOperationException($"Missing embedded resource: {resourceName}");
+                int bytesRead;
+                while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    sha256.TransformBlock(buffer, 0, bytesRead, null, 0);
+                }
+            }
+
+            sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return Convert.ToHexString(sha256.Hash!)
+                .ToLowerInvariant()
+                .Substring(0, 16);
+        }
+
+        private static string? GetWebAssetPath(string resourceSuffix)
+        {
+            if (resourceSuffix.StartsWith("pdfjs.cmaps.", StringComparison.Ordinal))
+            {
+                return "pdfjs/cmaps/" + resourceSuffix.Substring("pdfjs.cmaps.".Length);
+            }
+
+            if (resourceSuffix.StartsWith("pdfjs.standard_fonts.", StringComparison.Ordinal))
+            {
+                return "pdfjs/standard_fonts/" + resourceSuffix.Substring("pdfjs.standard_fonts.".Length);
+            }
+
+            return resourceSuffix switch
+            {
+                "viewer.html" => "viewer.html",
+                "pdfjs.pdf.min.js" => "pdfjs/pdf.min.js",
+                "pdfjs.pdf.worker.min.js" => "pdfjs/pdf.worker.min.js",
+                "pdfjs.LICENSE" => "pdfjs/LICENSE",
+                _ => null
+            };
         }
 
         private void InitializeComponent()
