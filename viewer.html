@@ -417,6 +417,63 @@
             viewerEl.scrollTop += offset - anchor.offset;
         }
 
+        // Zoom focus: the spot on the page under the mouse (or the window centre)
+        // stays put while the page is rebuilt at the new size. If a zoom arrives while
+        // a rebuild is still in flight the pages are gone, so the previous focus is kept.
+        let pendingFocus = null;
+
+        function captureFocus(clientX, clientY) {
+            if (pageViews.length === 0) {
+                return pendingFocus;
+            }
+            const viewerRect = viewerEl.getBoundingClientRect();
+            if (typeof clientX !== 'number' || typeof clientY !== 'number') {
+                clientX = viewerRect.left + viewerEl.clientWidth / 2;
+                clientY = viewerRect.top + viewerEl.clientHeight / 2;
+            }
+
+            let best = null;
+            let bestRect = null;
+            let bestDistance = Infinity;
+            for (const view of pageViews) {
+                const rect = view.element.getBoundingClientRect();
+                const distance = clientY < rect.top
+                    ? rect.top - clientY
+                    : (clientY > rect.bottom ? clientY - rect.bottom : 0);
+                if (distance < bestDistance) {
+                    best = view;
+                    bestRect = rect;
+                    bestDistance = distance;
+                }
+                if (distance === 0) {
+                    break;
+                }
+            }
+            if (!best || bestRect.width < 1 || bestRect.height < 1) {
+                return null;
+            }
+            return {
+                page: best.number,
+                fx: (clientX - bestRect.left) / bestRect.width,
+                fy: (clientY - bestRect.top) / bestRect.height,
+                px: clientX - viewerRect.left,
+                py: clientY - viewerRect.top
+            };
+        }
+
+        function applyFocus(focus) {
+            const view = pageViews.find(function (candidate) {
+                return candidate.number === focus.page;
+            });
+            if (!view) {
+                return;
+            }
+            const rect = view.element.getBoundingClientRect();
+            const viewerRect = viewerEl.getBoundingClientRect();
+            viewerEl.scrollLeft += (rect.left + focus.fx * rect.width) - (viewerRect.left + focus.px);
+            viewerEl.scrollTop += (rect.top + focus.fy * rect.height) - (viewerRect.top + focus.py);
+        }
+
         // Page mode fits the whole page in the window; continuous mode fits the
         // page width so scrolling stays natural.
         function computePageScale(sizes) {
@@ -434,7 +491,8 @@
 
         async function rebuild(options) {
             const opts = options || {};
-            const anchor = opts.anchor === false ? null : captureAnchor();
+            const focus = opts.focus || pendingFocus;
+            const anchor = (opts.anchor === false || focus) ? null : captureAnchor();
             const gen = ++generation;
 
             if (observer) {
@@ -444,6 +502,7 @@
             cancelAndClearPages();
 
             if (!pdfDoc) {
+                pendingFocus = null;
                 showEmptyState();
                 reportState(true);
                 return;
@@ -514,6 +573,10 @@
             if (!continuous) {
                 viewerEl.scrollTop = 0;
             }
+            if (focus) {
+                applyFocus(focus);
+            }
+            pendingFocus = null;
 
             if (typeof IntersectionObserver === 'function') {
                 observer = new IntersectionObserver(function (entries) {
@@ -677,23 +740,26 @@
             reportState(true);
         }
 
-        function setZoom(value) {
+        // clientX/clientY are optional: given, the zoom is centred on that point
+        // (the mouse); omitted (toolbar buttons from the host), on the window centre.
+        function setZoom(value, clientX, clientY) {
             const next = clamp(Math.round(value * 100) / 100, MIN_ZOOM, MAX_ZOOM);
             if (!pdfDoc || next === zoom) {
                 return;
             }
+            pendingFocus = captureFocus(clientX, clientY);
             zoom = next;
             rebuild({ anchor: true });
             reportState(true);
         }
 
         // Functions called from the Windows host.
-        function zoomIn() {
-            setZoom(zoom + ZOOM_STEP);
+        function zoomIn(clientX, clientY) {
+            setZoom(zoom + ZOOM_STEP, clientX, clientY);
         }
 
-        function zoomOut() {
-            setZoom(zoom - ZOOM_STEP);
+        function zoomOut(clientX, clientY) {
+            setZoom(zoom - ZOOM_STEP, clientX, clientY);
         }
 
         function prevPage() {
@@ -875,9 +941,9 @@
             if (event.ctrlKey) {
                 event.preventDefault();
                 if (event.deltaY < 0) {
-                    zoomIn();
+                    zoomIn(event.clientX, event.clientY);
                 } else {
-                    zoomOut();
+                    zoomOut(event.clientX, event.clientY);
                 }
                 return;
             }
