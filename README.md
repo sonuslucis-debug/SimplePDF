@@ -9,6 +9,7 @@ A simple PDF reader with no bells and whistles.
 - Page mode fits each page to the window, and the mouse wheel flips pages
 - Continuous mode with smooth mouse-wheel scrolling, plus zoom
 - Selectable text, so passages can be copied out of a PDF
+- Hold **Space** and drag to pan the page, like Photoshop and Illustrator (a quick tap still turns the page)
 - Print the whole document with the **Print** button or **Ctrl+P**
 - Sonus Lucis styling drawn from the website palette and logo
 - Custom application icon and an **About** dialog

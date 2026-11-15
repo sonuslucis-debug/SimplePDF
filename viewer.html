@@ -76,6 +76,18 @@
             background-clip: content-box;
         }
 
+        /* Hold Space to pan (Photoshop / Illustrator style). */
+        body.pan-ready #viewer,
+        body.pan-ready #viewer * {
+            cursor: grab !important;
+        }
+
+        body.panning #viewer,
+        body.panning #viewer * {
+            cursor: grabbing !important;
+            user-select: none !important;
+        }
+
         /* safe centring keeps oversized pages scrollable instead of clipped. */
         #pages {
             display: flex;
@@ -910,21 +922,135 @@
             }, 140);
         });
 
+        // Hold Space and drag to pan, as in Photoshop and Illustrator. A quick tap
+        // of Space (no drag) keeps its old job: next page, or Shift+Space for the
+        // previous one. Holding it down repeats nothing.
+        const TAP_MAX_MS = 350;
+        let spaceHeld = false;
+        let spaceDownAt = 0;
+        let spaceShift = false;
+        let panning = false;
+        let panMoved = false;
+        let panStartX = 0;
+        let panStartY = 0;
+        let panStartLeft = 0;
+        let panStartTop = 0;
+
+        function isTypingTarget(target) {
+            return !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+                || target.tagName === 'SELECT' || target.isContentEditable);
+        }
+
+        function endPan() {
+            panning = false;
+            document.body.classList.remove('panning');
+        }
+
+        function releaseSpace() {
+            spaceHeld = false;
+            endPan();
+            document.body.classList.remove('pan-ready');
+        }
+
         window.addEventListener('keydown', function (event) {
             if (event.ctrlKey && (event.key === 'p' || event.key === 'P')) {
                 event.preventDefault();
                 printPdf();
                 return;
             }
+
+            if ((event.key === ' ' || event.code === 'Space') && pdfDoc
+                && !event.ctrlKey && !event.altKey && !event.metaKey
+                && !isTypingTarget(event.target)) {
+                event.preventDefault();
+                if (!spaceHeld) {
+                    spaceHeld = true;
+                    spaceDownAt = performance.now();
+                    spaceShift = event.shiftKey;
+                    panMoved = false;
+                    document.body.classList.add('pan-ready');
+                }
+                return;
+            }
+
             if (continuous || event.ctrlKey || event.altKey) {
                 return;
             }
-            if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === ' ') {
+            if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'ArrowRight') {
                 event.preventDefault();
                 nextPage();
             } else if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
                 event.preventDefault();
                 prevPage();
+            }
+        });
+
+        window.addEventListener('keyup', function (event) {
+            if (event.key !== ' ' && event.code !== 'Space') {
+                return;
+            }
+            if (!spaceHeld) {
+                return;
+            }
+            event.preventDefault();
+
+            const wasTap = !panMoved && (performance.now() - spaceDownAt) < TAP_MAX_MS;
+            const wantPrevious = spaceShift || event.shiftKey;
+            releaseSpace();
+
+            if (!wasTap || !pdfDoc) {
+                return;
+            }
+            if (continuous) {
+                // Same as the browser's native Space scrolling, which we now intercept.
+                const distance = viewerEl.clientHeight * 0.875;
+                viewerEl.scrollBy({ top: wantPrevious ? -distance : distance });
+            } else if (wantPrevious) {
+                prevPage();
+            } else {
+                nextPage();
+            }
+        });
+
+        window.addEventListener('mousedown', function (event) {
+            if (!spaceHeld || event.button !== 0 || !pdfDoc) {
+                return;
+            }
+            event.preventDefault();
+            panning = true;
+            panMoved = true;
+            panStartX = event.clientX;
+            panStartY = event.clientY;
+            panStartLeft = viewerEl.scrollLeft;
+            panStartTop = viewerEl.scrollTop;
+            document.body.classList.add('panning');
+        }, true);
+
+        window.addEventListener('mousemove', function (event) {
+            if (!panning) {
+                return;
+            }
+            if ((event.buttons & 1) === 0) {
+                // Button released outside the window; stop dragging.
+                endPan();
+                return;
+            }
+            event.preventDefault();
+            viewerEl.scrollLeft = panStartLeft - (event.clientX - panStartX);
+            viewerEl.scrollTop = panStartTop - (event.clientY - panStartY);
+        }, true);
+
+        window.addEventListener('mouseup', function () {
+            if (panning) {
+                endPan();
+            }
+        }, true);
+
+        // Never get stuck in pan mode if the key-up is missed (Alt+Tab, dialogs).
+        window.addEventListener('blur', releaseSpace);
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                releaseSpace();
             }
         });
 
