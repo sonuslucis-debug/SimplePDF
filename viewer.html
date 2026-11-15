@@ -7,15 +7,17 @@
     <!-- Brand palette and typography come from the site stylesheet. -->
     <link rel="stylesheet" href="style.css">
     <style>
+        /* Viewer classes are prefixed so the site stylesheet (which styles its
+           own .page elements) cannot affect the rendered PDF pages. */
         :root {
             --navy: #0e3a5b;
             --ink: #2b2b2b;
             --paper: #ffffff;
             --accent: #2e6da4;
-            --viewer-bg: #0a2a42;
-            --viewer-bg-edge: #061c2c;
-            --page-shadow: 0 8px 28px rgba(2, 12, 20, 0.55);
-            --selection: rgba(46, 109, 164, 0.32);
+            --viewer-bg: #ffffff;
+            --page-border: #d9e5ee;
+            --page-shadow: 0 2px 10px rgba(14, 58, 91, 0.10);
+            --selection: rgba(46, 109, 164, 0.28);
             --page-gap: 22px;
             --page-padding: 22px;
         }
@@ -35,7 +37,7 @@
 
         body {
             font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
-            color: var(--paper);
+            color: var(--ink);
         }
 
         [hidden] {
@@ -48,8 +50,8 @@
             inset: 0;
             overflow: auto;
             overscroll-behavior: contain;
-            background: linear-gradient(180deg, var(--viewer-bg) 0%, var(--viewer-bg-edge) 100%);
-            scrollbar-color: var(--accent) transparent;
+            background: var(--viewer-bg);
+            scrollbar-color: var(--accent) #eef4f9;
             outline: none;
         }
 
@@ -59,11 +61,11 @@
         }
 
         #viewer::-webkit-scrollbar-track {
-            background: transparent;
+            background: #eef4f9;
         }
 
         #viewer::-webkit-scrollbar-thumb {
-            background: rgba(46, 109, 164, 0.8);
+            background: rgba(46, 109, 164, 0.75);
             border: 3px solid transparent;
             border-radius: 7px;
             background-clip: content-box;
@@ -74,29 +76,30 @@
             background-clip: content-box;
         }
 
+        /* safe centring keeps oversized pages scrollable instead of clipped. */
         #pages {
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: safe center;
             gap: var(--page-gap);
             min-height: 100%;
             padding: var(--page-padding);
         }
 
-        .page {
+        #pages.single {
+            justify-content: safe center;
+        }
+
+        .pdf-page {
             position: relative;
             flex: 0 0 auto;
-            margin-inline: auto;
             background: var(--paper);
+            border: 1px solid var(--page-border);
             box-shadow: var(--page-shadow);
             overflow: hidden;
         }
 
-        #pages.single .page {
-            margin-block: auto;
-        }
-
-        .page canvas {
+        .pdf-page canvas {
             display: block;
         }
 
@@ -134,8 +137,8 @@
             background: transparent;
         }
 
-        /* Empty state and drop hint use the site's navy/accent palette. */
-        .empty {
+        /* Empty state, styled after the site's dashed drop zone. */
+        .pdf-empty {
             position: absolute;
             inset: 0;
             display: flex;
@@ -145,28 +148,27 @@
             padding: 32px;
         }
 
-        .empty-card {
-            max-width: 460px;
+        .pdf-empty-card {
+            width: min(620px, 100%);
             text-align: center;
-            border: 1px solid rgba(46, 109, 164, 0.55);
-            border-radius: 10px;
-            padding: 28px 34px;
-            background: rgba(14, 58, 91, 0.55);
-            box-shadow: 0 10px 30px rgba(2, 12, 20, 0.45);
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            padding: 34px 40px;
+            background: #f2f8fc;
         }
 
-        .empty-title {
-            font-size: 1.4rem;
+        .pdf-empty-title {
+            font-size: 1.35rem;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            color: var(--paper);
-            margin-bottom: 8px;
+            letter-spacing: 0.02em;
+            color: var(--navy);
+            margin-bottom: 10px;
         }
 
-        .empty-text {
+        .pdf-empty-text {
             font-size: 0.95rem;
             line-height: 1.6;
-            color: #cfe0ee;
+            color: #4a6274;
         }
 
         #dropOverlay {
@@ -176,13 +178,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 3px dashed var(--accent);
-            border-radius: 12px;
-            background: rgba(10, 42, 66, 0.72);
-            color: var(--paper);
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
+            background: rgba(242, 248, 252, 0.94);
+            color: var(--navy);
             font-size: 1.1rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
+            font-weight: 700;
+            letter-spacing: 0.03em;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.15s ease;
@@ -219,7 +221,7 @@
                 display: block;
             }
 
-            .print-page {
+            .pdf-print-page {
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -230,12 +232,12 @@
                 page-break-after: always;
             }
 
-            .print-page:last-child {
+            .pdf-print-page:last-child {
                 break-after: auto;
                 page-break-after: auto;
             }
 
-            .print-page canvas {
+            .pdf-print-page canvas {
                 width: auto;
                 height: auto;
                 max-width: 100%;
@@ -248,14 +250,15 @@
 </head>
 <body>
     <div id="viewer" tabindex="0">
-        <div id="pages" class="single"></div>
+        <div id="pages"></div>
     </div>
 
-    <div id="empty" class="empty">
-        <div class="empty-card">
-            <div class="empty-title">Simple PDF Reader</div>
-            <div class="empty-text">
+    <div id="empty" class="pdf-empty">
+        <div class="pdf-empty-card">
+            <div class="pdf-empty-title">Drop a PDF file here</div>
+            <div class="pdf-empty-text">
                 Open a PDF, drop one onto this window, or pass a file on the command line.
+                In page mode the mouse wheel moves between pages.
             </div>
         </div>
     </div>
@@ -270,14 +273,19 @@
         const emptyEl = document.getElementById('empty');
         const printContainer = document.getElementById('printContainer');
 
-        const MIN_SCALE = 0.25;
-        const MAX_SCALE = 4;
+        const MIN_ZOOM = 0.25;
+        const MAX_ZOOM = 4;
         const ZOOM_STEP = 0.15;
-        const PAGE_PADDING = 22;
+        const WHEEL_PAGE_THRESHOLD = 40;
+        const WHEEL_PAGE_LOCK_MS = 320;
+        const WHEEL_RESET_MS = 220;
 
         let pdfDoc = null;
         let currentPage = 1;
-        let scale = 1;
+        // Zoom is a factor of the fit scale: 1 means the page fits the window.
+        let zoom = 1;
+        let fitScale = 1;
+        let pageScale = 1;
         let continuous = false;
         let generation = 0;
         let loadToken = 0;
@@ -288,6 +296,10 @@
         let dragDepth = 0;
         let scrollScheduled = false;
         let lastStateKey = '';
+        let resizeTimer = null;
+        let wheelAccumulator = 0;
+        let wheelResetTimer = null;
+        let wheelLockUntil = 0;
 
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
 
@@ -299,12 +311,12 @@
 
         function reportState(force) {
             const total = pdfDoc ? pdfDoc.numPages : 0;
-            const key = `${currentPage}/${total}/${scale}`;
+            const key = `${currentPage}/${total}/${zoom}/${continuous}`;
             if (!force && key === lastStateKey) {
                 return;
             }
             lastStateKey = key;
-            notifyHost({ type: 'state', page: currentPage, total: total, zoom: scale });
+            notifyHost({ type: 'state', page: currentPage, total: total, zoom: zoom });
         }
 
         function reportStatus(text) {
@@ -327,6 +339,16 @@
         function showDocumentState() {
             emptyEl.hidden = true;
             pagesEl.hidden = false;
+        }
+
+        function viewerMetrics() {
+            const styles = getComputedStyle(pagesEl);
+            const padX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
+            const padY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+            return {
+                width: Math.max(80, viewerEl.clientWidth - padX - 2),
+                height: Math.max(80, viewerEl.clientHeight - padY - 2)
+            };
         }
 
         function cancelAndClearPages() {
@@ -383,9 +405,24 @@
             viewerEl.scrollTop += offset - anchor.offset;
         }
 
+        // Page mode fits the whole page in the window; continuous mode fits the
+        // page width so scrolling stays natural.
+        function computePageScale(sizes) {
+            const metrics = viewerMetrics();
+            if (continuous) {
+                const widest = sizes.reduce(function (max, size) {
+                    return Math.max(max, size.width);
+                }, 1);
+                return metrics.width / widest;
+            }
+            return Math.min(
+                metrics.width / sizes[0].width,
+                metrics.height / sizes[0].height);
+        }
+
         async function rebuild(options) {
-            const useAnchor = !options || options.anchor !== false;
-            const anchor = useAnchor ? captureAnchor() : null;
+            const opts = options || {};
+            const anchor = opts.anchor === false ? null : captureAnchor();
             const gen = ++generation;
 
             if (observer) {
@@ -425,13 +462,19 @@
                 return;
             }
 
+            fitScale = Math.max(0.05, computePageScale(sizes));
+            pageScale = fitScale * zoom;
+
             numbers.forEach(function (number, index) {
                 const base = sizes[index];
+                const width = Math.max(1, Math.floor(base.width * pageScale));
+                const height = Math.max(1, Math.floor(base.height * pageScale));
+
                 const element = document.createElement('div');
-                element.className = 'page';
+                element.className = 'pdf-page';
                 element.dataset.page = String(number);
-                element.style.width = Math.round(base.width * scale) + 'px';
-                element.style.height = Math.round(base.height * scale) + 'px';
+                element.style.width = width + 'px';
+                element.style.height = height + 'px';
 
                 const canvas = document.createElement('canvas');
                 const textLayer = document.createElement('div');
@@ -456,6 +499,9 @@
             });
 
             restoreAnchor(anchor);
+            if (!continuous) {
+                viewerEl.scrollTop = 0;
+            }
 
             if (typeof IntersectionObserver === 'function') {
                 observer = new IntersectionObserver(function (entries) {
@@ -491,14 +537,14 @@
                     return;
                 }
 
-                const viewport = page.getViewport({ scale: scale });
+                const viewport = page.getViewport({ scale: pageScale });
                 const ratio = window.devicePixelRatio || 1;
                 const canvas = view.canvas;
 
                 canvas.width = Math.max(1, Math.round(viewport.width * ratio));
                 canvas.height = Math.max(1, Math.round(viewport.height * ratio));
-                canvas.style.width = viewport.width + 'px';
-                canvas.style.height = viewport.height + 'px';
+                canvas.style.width = view.element.style.width;
+                canvas.style.height = view.element.style.height;
 
                 const context = canvas.getContext('2d', { alpha: false });
                 context.fillStyle = '#ffffff';
@@ -590,7 +636,7 @@
             const offset = view.element.getBoundingClientRect().top
                 - viewerEl.getBoundingClientRect().top
                 + viewerEl.scrollTop
-                - PAGE_PADDING;
+                - parseFloat(getComputedStyle(pagesEl).paddingTop);
             viewerEl.scrollTop = Math.max(0, offset);
             renderPageView(view);
         }
@@ -599,7 +645,11 @@
             if (!pdfDoc) {
                 return;
             }
-            currentPage = clamp(number, 1, pdfDoc.numPages);
+            const next = clamp(number, 1, pdfDoc.numPages);
+            if (next === currentPage && !continuous) {
+                return;
+            }
+            currentPage = next;
 
             if (continuous) {
                 const view = pageViews.find(function (candidate) {
@@ -607,36 +657,31 @@
                 });
                 if (view) {
                     renderPageView(view);
-                    const offset = view.element.getBoundingClientRect().top
-                        - viewerEl.getBoundingClientRect().top
-                        + viewerEl.scrollTop
-                        - PAGE_PADDING;
-                    viewerEl.scrollTop = Math.max(0, offset);
+                    scrollToCurrentPage();
                 }
             } else {
-                viewerEl.scrollTop = 0;
                 rebuild({ anchor: false });
             }
             reportState(true);
         }
 
-        function setScale(value) {
-            const next = clamp(Math.round(value * 100) / 100, MIN_SCALE, MAX_SCALE);
-            if (!pdfDoc || next === scale) {
+        function setZoom(value) {
+            const next = clamp(Math.round(value * 100) / 100, MIN_ZOOM, MAX_ZOOM);
+            if (!pdfDoc || next === zoom) {
                 return;
             }
-            scale = next;
+            zoom = next;
             rebuild({ anchor: true });
             reportState(true);
         }
 
         // Functions called from the Windows host.
         function zoomIn() {
-            setScale(scale + ZOOM_STEP);
+            setZoom(zoom + ZOOM_STEP);
         }
 
         function zoomOut() {
-            setScale(scale - ZOOM_STEP);
+            setZoom(zoom - ZOOM_STEP);
         }
 
         function prevPage() {
@@ -679,7 +724,7 @@
                 const previous = pdfDoc;
                 pdfDoc = pdf;
                 currentPage = 1;
-                scale = 1;
+                zoom = 1;
                 await rebuild({ anchor: false });
 
                 if (previous && previous !== pdf) {
@@ -812,17 +857,58 @@
             });
         }, { passive: true });
 
+        // Ctrl+wheel zooms. In page mode a plain wheel flips pages, which is the
+        // page-by-page reading behaviour; continuous mode keeps native scrolling.
         window.addEventListener('wheel', function (event) {
-            if (!event.ctrlKey) {
+            if (event.ctrlKey) {
+                event.preventDefault();
+                if (event.deltaY < 0) {
+                    zoomIn();
+                } else {
+                    zoomOut();
+                }
                 return;
             }
+
+            if (continuous || !pdfDoc) {
+                return;
+            }
+
             event.preventDefault();
-            if (event.deltaY < 0) {
-                zoomIn();
-            } else {
-                zoomOut();
+
+            const now = performance.now();
+            if (now < wheelLockUntil) {
+                return;
+            }
+
+            const multiplier = event.deltaMode === 1 ? 16 : (event.deltaMode === 2 ? 100 : 1);
+            wheelAccumulator += event.deltaY * multiplier;
+
+            clearTimeout(wheelResetTimer);
+            wheelResetTimer = setTimeout(function () {
+                wheelAccumulator = 0;
+            }, WHEEL_RESET_MS);
+
+            if (Math.abs(wheelAccumulator) >= WHEEL_PAGE_THRESHOLD) {
+                const direction = wheelAccumulator > 0 ? 1 : -1;
+                wheelAccumulator = 0;
+                wheelLockUntil = now + WHEEL_PAGE_LOCK_MS;
+                goToPage(currentPage + direction);
             }
         }, { passive: false });
+
+        // Re-fit the page when the window is resized.
+        window.addEventListener('resize', function () {
+            if (!pdfDoc) {
+                return;
+            }
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function () {
+                resizeTimer = null;
+                rebuild({ anchor: true });
+                reportState(true);
+            }, 140);
+        });
 
         window.addEventListener('keydown', function (event) {
             if (event.ctrlKey && (event.key === 'p' || event.key === 'P')) {
@@ -830,14 +916,15 @@
                 printPdf();
                 return;
             }
-            if (!continuous && !event.ctrlKey && !event.altKey) {
-                if (event.key === 'PageDown' || event.key === 'ArrowRight') {
-                    event.preventDefault();
-                    nextPage();
-                } else if (event.key === 'PageUp' || event.key === 'ArrowLeft') {
-                    event.preventDefault();
-                    prevPage();
-                }
+            if (continuous || event.ctrlKey || event.altKey) {
+                return;
+            }
+            if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === ' ') {
+                event.preventDefault();
+                nextPage();
+            } else if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+                event.preventDefault();
+                prevPage();
             }
         });
 
@@ -873,7 +960,7 @@
                 }
 
                 const pageElement = document.createElement('div');
-                pageElement.className = 'print-page';
+                pageElement.className = 'pdf-print-page';
 
                 const canvas = document.createElement('canvas');
                 canvas.width = Math.ceil(viewport.width);

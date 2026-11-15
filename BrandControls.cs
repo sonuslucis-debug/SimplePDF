@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.IO;
 using System.Reflection;
@@ -82,27 +83,34 @@ namespace SimplePdfReader
     internal enum BrandButtonStyle
     {
         Primary,
-        Outline,
-        Header
+        Light
     }
 
-    // Flat button that follows the navy/accent palette instead of the system
-    // chrome. It uses the native flat renderer so text and edges stay crisp at
-    // any display scaling.
+    // Rounded flat button in the Sonus Lucis palette. It paints itself so the
+    // corners match the site styling; text is drawn with GDI so it stays crisp.
     internal sealed class BrandButton : Button
     {
         private bool isChecked;
-        private BrandButtonStyle style = BrandButtonStyle.Outline;
+        private bool hovered;
+        private bool pressed;
+        private BrandButtonStyle style = BrandButtonStyle.Light;
 
         public BrandButton()
         {
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
+
             FlatStyle = FlatStyle.Flat;
-            FlatAppearance.BorderSize = 1;
+            FlatAppearance.BorderSize = 0;
             UseVisualStyleBackColor = false;
             Cursor = Cursors.Hand;
             Font = Brand.Font(9f, FontStyle.Bold);
             Height = 30;
-            ApplyColors();
+            BackColor = Brand.Paper;
         }
 
         public BrandButtonStyle Style
@@ -111,7 +119,7 @@ namespace SimplePdfReader
             set
             {
                 style = value;
-                ApplyColors();
+                Invalidate();
             }
         }
 
@@ -127,7 +135,7 @@ namespace SimplePdfReader
                     return;
                 }
                 isChecked = value;
-                ApplyColors();
+                Invalidate();
                 CheckedChanged?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -143,75 +151,126 @@ namespace SimplePdfReader
             base.OnClick(e);
         }
 
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            hovered = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            hovered = false;
+            pressed = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                pressed = true;
+                Invalidate();
+            }
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            pressed = false;
+            Invalidate();
+            base.OnMouseUp(e);
+        }
+
         protected override void OnEnabledChanged(EventArgs e)
         {
             base.OnEnabledChanged(e);
             Cursor = Enabled ? Cursors.Hand : Cursors.Default;
-            ApplyColors();
+            Invalidate();
         }
 
-        private void ApplyColors()
+        protected override void OnPaint(PaintEventArgs e)
         {
-            Color back;
-            Color fore;
-            Color border;
-            Color hover;
-            Color pressed;
+            Graphics graphics = e.Graphics;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            if (isChecked)
+            // The rounded shape leaves the corners of the control unpainted, so
+            // clear the whole surface with the parent colour first.
+            graphics.Clear(Parent != null ? Parent.BackColor : Brand.Paper);
+
+            Color back;
+            Color border;
+            Color text = Enabled ? Brand.Navy : Brand.DisabledText;
+
+            if (!Enabled)
             {
-                back = Brand.Accent;
-                fore = Color.White;
+                back = style == BrandButtonStyle.Primary
+                    ? Color.FromArgb(196, 209, 219)
+                    : Color.FromArgb(246, 249, 251);
+                border = Color.FromArgb(219, 230, 238);
+                text = Color.White;
+            }
+            else if (isChecked)
+            {
+                back = pressed ? Brand.PaleBlueHover : Brand.PaleBlue;
                 border = Brand.Accent;
-                hover = Brand.Navy;
-                pressed = Brand.NavyPressed;
+                text = Brand.Navy;
+            }
+            else if (style == BrandButtonStyle.Primary)
+            {
+                back = pressed ? Brand.NavyPressed : (hovered ? Brand.NavyHover : Brand.Navy);
+                border = back;
+                text = Color.White;
             }
             else
             {
-                switch (style)
-                {
-                    case BrandButtonStyle.Primary:
-                        back = Brand.Navy;
-                        fore = Color.White;
-                        border = Brand.Navy;
-                        hover = Brand.NavyHover;
-                        pressed = Brand.NavyPressed;
-                        break;
-
-                    case BrandButtonStyle.Header:
-                        back = Brand.Navy;
-                        fore = Color.White;
-                        border = Brand.OnNavyMuted;
-                        hover = Brand.Accent;
-                        pressed = Brand.NavyPressed;
-                        break;
-
-                    default:
-                        back = Brand.Paper;
-                        fore = Brand.Navy;
-                        border = Brand.PaleBorder;
-                        hover = Brand.PaleBlue;
-                        pressed = Brand.PaleBlueHover;
-                        break;
-                }
+                back = pressed ? Brand.PaleBlueHover : (hovered ? Brand.PaleBlue : Brand.Paper);
+                border = hovered ? Brand.Accent : Brand.PaleBorder;
+                text = Brand.Navy;
             }
 
-            if (!Enabled && !isChecked)
+            if (!Enabled && style != BrandButtonStyle.Primary)
             {
-                back = style == BrandButtonStyle.Primary
-                    ? Color.FromArgb(190, 204, 214)
-                    : (style == BrandButtonStyle.Header ? Brand.Navy : Brand.Paper);
-                fore = style == BrandButtonStyle.Header ? Brand.OnNavyMuted : Brand.DisabledText;
-                border = style == BrandButtonStyle.Header ? Brand.Navy : Brand.PaleBorder;
-                hover = back;
-                pressed = back;
+                text = Brand.DisabledText;
             }
 
-            BackColor = back;
-            ForeColor = fore;
-            FlatAppearance.BorderColor = border;
-            FlatAppearance.MouseOverBackColor = hover;
-            FlatAppearance.MouseDownBackColor = pressed;
+            var bounds = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using (GraphicsPath path = RoundedRectangle(bounds, 5f))
+            {
+                using (var brush = new SolidBrush(back))
+                {
+                    graphics.FillPath(brush, path);
+                }
+                using var pen = new Pen(border, 1f);
+                graphics.DrawPath(pen, path);
+            }
+
+            var textBounds = new Rectangle(2, 0, Width - 4, Height);
+            TextRenderer.DrawText(
+                graphics,
+                Text,
+                Font,
+                textBounds,
+                text,
+                TextFormatFlags.HorizontalCenter |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPadding |
+                TextFormatFlags.NoPrefix);
+        }
+
+        private static GraphicsPath RoundedRectangle(RectangleF bounds, float radius)
+        {
+            var path = new GraphicsPath();
+            float diameter = radius * 2f;
+
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180f, 90f);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270f, 90f);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0f, 90f);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90f, 90f);
+            path.CloseFigure();
+            return path;
         }
     }
 }

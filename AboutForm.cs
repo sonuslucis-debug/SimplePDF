@@ -21,13 +21,15 @@ namespace SimplePdfReader
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.ClientSize = new Size(480, 400);
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+            this.AutoScaleMode = AutoScaleMode.Dpi;
+            this.ClientSize = new Size(560, 460);
             this.BackColor = Brand.Paper;
             this.Icon = MainForm.AppIcon;
 
             var logoBox = new PictureBox
             {
-                Location = new Point(24, 24),
+                Location = new Point(26, 26),
                 Size = new Size(96, 96),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 Image = LoadLogo()
@@ -36,8 +38,8 @@ namespace SimplePdfReader
             var titleLabel = new Label
             {
                 AutoSize = true,
-                Location = new Point(140, 26),
-                Font = Brand.Font(16F, FontStyle.Bold),
+                Location = new Point(148, 24),
+                Font = Brand.Font(18F, FontStyle.Bold),
                 ForeColor = Brand.Navy,
                 Text = "Simple PDF Reader"
             };
@@ -45,30 +47,32 @@ namespace SimplePdfReader
             var versionLabel = new Label
             {
                 AutoSize = true,
-                Location = new Point(143, 64),
+                Location = new Point(151, 66),
                 ForeColor = Color.FromArgb(120, 141, 158),
                 Text = $"Version {Application.ProductVersion}"
             };
 
             var descriptionLabel = new Label
             {
-                Location = new Point(140, 92),
-                Size = new Size(316, 42),
+                AutoSize = true,
+                MaximumSize = new Size(380, 0),
+                Location = new Point(148, 94),
                 ForeColor = Brand.Ink,
                 Text = "A simple PDF reader with no bells and whistles."
             };
 
             var separator = new Panel
             {
-                Location = new Point(24, 144),
-                Size = new Size(432, 1),
+                Location = new Point(26, 158),
+                Size = new Size(508, 1),
                 BackColor = Brand.PaleBorder
             };
 
             var creditsLabel = new Label
             {
-                Location = new Point(24, 158),
-                Size = new Size(432, 132),
+                AutoSize = true,
+                MaximumSize = new Size(500, 0),
+                Margin = new Padding(0, 0, 0, 16),
                 ForeColor = Brand.Ink,
                 Text =
                     "PDF rendering by Mozilla PDF.js.\r\n" +
@@ -81,19 +85,32 @@ namespace SimplePdfReader
             var websiteLink = new LinkLabel
             {
                 AutoSize = true,
-                Location = new Point(24, 302),
+                Margin = new Padding(0),
                 Text = "sonuslucis.com",
                 LinkColor = Brand.Accent,
                 ActiveLinkColor = Brand.Navy
             };
             websiteLink.LinkClicked += (_, _) => OpenWebsite("https://sonuslucis.com");
 
+            var contentPanel = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Location = new Point(26, 172),
+                Width = 508
+            };
+            contentPanel.Controls.Add(creditsLabel);
+            contentPanel.Controls.Add(websiteLink);
+
             var okButton = new BrandButton
             {
                 Text = "OK",
                 DialogResult = DialogResult.OK,
-                Location = new Point(372, 352),
+                Location = new Point(450, 404),
                 Size = new Size(84, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                 Style = BrandButtonStyle.Primary
             };
 
@@ -104,8 +121,7 @@ namespace SimplePdfReader
                 versionLabel,
                 descriptionLabel,
                 separator,
-                creditsLabel,
-                websiteLink,
+                contentPanel,
                 okButton
             });
 

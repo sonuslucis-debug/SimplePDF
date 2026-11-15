@@ -6,7 +6,8 @@ A simple PDF reader with no bells and whistles.
 - Open and view PDF documents
 - Drag and drop a PDF onto the window, or pass a PDF path on the command line
 - Smooth mouse-wheel scrolling through the whole document
-- Page-by-page or continuous mode, with zoom
+- Page mode fits each page to the window, and the mouse wheel flips pages
+- Continuous mode with smooth mouse-wheel scrolling, plus zoom
 - Selectable text, so passages can be copied out of a PDF
 - Print the whole document with the **Print** button or **Ctrl+P**
 - Sonus Lucis styling drawn from the website palette and logo

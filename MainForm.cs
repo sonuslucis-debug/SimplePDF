@@ -20,8 +20,8 @@ namespace SimplePdfReader
 
         private WebView2 webView = null!;
         private Panel headerPanel = null!;
-        private PictureBox headerLogo = null!;
         private Label titleLabel = null!;
+        private Label qualifierLabel = null!;
         private Label subtitleLabel = null!;
         private Panel toolbarPanel = null!;
         private Panel statusPanel = null!;
@@ -505,8 +505,8 @@ namespace SimplePdfReader
         private void InitializeComponent()
         {
             this.headerPanel = new Panel();
-            this.headerLogo = new PictureBox();
             this.titleLabel = new Label();
+            this.qualifierLabel = new Label();
             this.subtitleLabel = new Label();
             this.aboutButton = new BrandButton();
             this.toolbarPanel = new Panel();
@@ -521,7 +521,6 @@ namespace SimplePdfReader
             this.pageStatusLabel = new Label();
             this.zoomStatusLabel = new Label();
             this.webView = new WebView2();
-            ((System.ComponentModel.ISupportInitialize)this.headerLogo).BeginInit();
             this.headerPanel.SuspendLayout();
             this.toolbarPanel.SuspendLayout();
             this.statusPanel.SuspendLayout();
@@ -535,35 +534,33 @@ namespace SimplePdfReader
             this.headerPanel.BackColor = Brand.Navy;
             this.headerPanel.Dock = DockStyle.Top;
             this.headerPanel.Height = 58;
+            this.headerPanel.Layout += new LayoutEventHandler(this.HeaderPanel_Layout);
             this.headerPanel.Name = "headerPanel";
-            // 
-            // headerLogo
-            // 
-            this.headerLogo.BackColor = Color.Transparent;
-            this.headerLogo.Image = Brand.LoadLogo();
-            this.headerLogo.Location = new Point(16, 11);
-            this.headerLogo.Name = "headerLogo";
-            this.headerLogo.Size = new Size(36, 36);
-            this.headerLogo.SizeMode = PictureBoxSizeMode.Zoom;
-            this.headerLogo.TabStop = false;
             // 
             // titleLabel
             // 
             this.titleLabel.AutoSize = true;
             this.titleLabel.BackColor = Color.Transparent;
-            this.titleLabel.Font = Brand.Font(13.5f, FontStyle.Bold);
+            this.titleLabel.Font = Brand.Font(16f, FontStyle.Bold);
             this.titleLabel.ForeColor = Color.White;
-            this.titleLabel.Location = new Point(60, 8);
             this.titleLabel.Name = "titleLabel";
             this.titleLabel.Text = "SIMPLE PDF";
+            // 
+            // qualifierLabel
+            // 
+            this.qualifierLabel.AutoSize = true;
+            this.qualifierLabel.BackColor = Color.Transparent;
+            this.qualifierLabel.Font = Brand.Font(16f, FontStyle.Bold);
+            this.qualifierLabel.ForeColor = Color.FromArgb(143, 182, 214);
+            this.qualifierLabel.Name = "qualifierLabel";
+            this.qualifierLabel.Text = "[READER]";
             // 
             // subtitleLabel
             // 
             this.subtitleLabel.AutoSize = true;
             this.subtitleLabel.BackColor = Color.Transparent;
-            this.subtitleLabel.Font = Brand.Font(8.25f, FontStyle.Regular);
-            this.subtitleLabel.ForeColor = Brand.OnNavyMuted;
-            this.subtitleLabel.Location = new Point(62, 32);
+            this.subtitleLabel.Font = Brand.Font(9.5f, FontStyle.Regular);
+            this.subtitleLabel.ForeColor = Color.FromArgb(169, 203, 228);
             this.subtitleLabel.Name = "subtitleLabel";
             this.subtitleLabel.Text = "by Sonus Lucis";
             // 
@@ -572,7 +569,8 @@ namespace SimplePdfReader
             this.aboutButton.Margin = new Padding(0);
             this.aboutButton.Name = "aboutButton";
             this.aboutButton.Size = new Size(84, 30);
-            this.aboutButton.Style = BrandButtonStyle.Header;
+            this.aboutButton.BackColor = Brand.Paper;
+            this.aboutButton.Style = BrandButtonStyle.Light;
             this.aboutButton.Text = "About";
             this.aboutButton.Click += new EventHandler(this.AboutButton_Click);
             // 
@@ -586,8 +584,8 @@ namespace SimplePdfReader
             headerActions.Width = 112;
             headerActions.WrapContents = false;
             headerActions.Controls.Add(this.aboutButton);
-            this.headerPanel.Controls.Add(this.headerLogo);
             this.headerPanel.Controls.Add(this.titleLabel);
+            this.headerPanel.Controls.Add(this.qualifierLabel);
             this.headerPanel.Controls.Add(this.subtitleLabel);
             this.headerPanel.Controls.Add(headerActions);
             // 
@@ -733,18 +731,18 @@ namespace SimplePdfReader
             this.webView.Dock = DockStyle.Fill;
             this.webView.Location = new Point(0, 106);
             this.webView.Name = "webView";
-            this.webView.Size = new System.Drawing.Size(1024, 586);
+            this.webView.Size = new System.Drawing.Size(900, 506);
             this.webView.TabIndex = 2;
             this.webView.DragEnter += new DragEventHandler(this.HandleDragEnter);
             this.webView.DragDrop += new DragEventHandler(this.HandleDragDrop);
             // 
             // MainForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = AutoScaleMode.Font;
+            this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
+            this.AutoScaleMode = AutoScaleMode.Dpi;
             this.BackColor = Brand.Navy;
-            this.ClientSize = new System.Drawing.Size(1024, 720);
-            this.MinimumSize = new System.Drawing.Size(760, 520);
+            this.ClientSize = new System.Drawing.Size(900, 640);
+            this.MinimumSize = new System.Drawing.Size(720, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Controls.Add(this.webView);
             this.Controls.Add(this.statusPanel);
@@ -752,13 +750,40 @@ namespace SimplePdfReader
             this.Controls.Add(this.headerPanel);
             this.Name = "MainForm";
             this.Text = "Simple PDF Reader";
-            ((System.ComponentModel.ISupportInitialize)this.headerLogo).EndInit();
             this.headerPanel.ResumeLayout(false);
             this.headerPanel.PerformLayout();
             this.toolbarPanel.ResumeLayout(false);
             this.statusPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
+            LayoutHeaderText();
+        }
+
+        private void HeaderPanel_Layout(object? sender, LayoutEventArgs e)
+        {
+            LayoutHeaderText();
+        }
+
+        private void LayoutHeaderText()
+        {
+            if (titleLabel.Height <= 0)
+            {
+                return;
+            }
+
+            const int left = 20;
+            int titleTop = Math.Max(4, (headerPanel.ClientSize.Height - titleLabel.Height) / 2 - 4);
+            titleLabel.Location = new Point(left, titleTop);
+
+            int qualifierLeft = left + TextRenderer.MeasureText(
+                titleLabel.Text, titleLabel.Font, Size.Empty, TextFormatFlags.NoPadding).Width + 8;
+            qualifierLabel.Location = new Point(qualifierLeft, titleTop);
+
+            int subtitleLeft = qualifierLeft + TextRenderer.MeasureText(
+                qualifierLabel.Text, qualifierLabel.Font, Size.Empty, TextFormatFlags.NoPadding).Width + 12;
+            subtitleLabel.Location = new Point(
+                subtitleLeft,
+                titleTop + titleLabel.Height - subtitleLabel.Height - 2);
         }
 
         private void ToolbarPanel_Paint(object? sender, PaintEventArgs e)
